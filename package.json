@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "dist": "npm run build && electron-builder --win nsis",
     "dist:portable": "npm run build && electron-builder --win portable",
-    "dist:all": "npm run build && electron-builder --win nsis portable"
+    "dist:all": "npm run build && electron-builder --win nsis portable",
+    "release": "npm run build && electron-builder --win nsis --publish=always"
   },
   "dependencies": {
     "better-sqlite3": "^11.5.0",
