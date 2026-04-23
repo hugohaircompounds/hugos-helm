@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, dialog } from 'electron';
 import path from 'node:path';
+import { autoUpdater } from 'electron-updater';
 import { initDb } from './db';
 import { registerIpc } from './ipc/handlers';
 import { startScheduler } from './scheduler';
@@ -43,11 +44,50 @@ function createWindow(): void {
   });
 }
 
+function setupAutoUpdater(): void {
+  if (isDev) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('error', (err) => {
+    console.error('[auto-update] error:', err);
+  });
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[auto-update] available: ${info.version}, downloading in background`);
+  });
+  autoUpdater.on('update-not-available', () => {
+    console.log('[auto-update] up to date');
+  });
+  autoUpdater.on('update-downloaded', async (info) => {
+    const w = getWindow();
+    const opts = {
+      type: 'info' as const,
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Update ready',
+      message: `Helm ${info.version} is ready to install.`,
+      detail:
+        'Click "Restart now" to apply the update immediately, or "Later" to install automatically when you quit Helm.',
+    };
+    const result = w
+      ? await dialog.showMessageBox(w, opts)
+      : await dialog.showMessageBox(opts);
+    if (result.response === 0) autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error('[auto-update] check failed:', err);
+  });
+}
+
 app.whenReady().then(() => {
   initDb();
   registerIpc(getWindow);
   createWindow();
   startScheduler();
+  setupAutoUpdater();
 
   // Reconcile with whatever ClickUp says is running (covers timers started from
   // the web/mobile clients). One sync immediately after the DB is up, then every
