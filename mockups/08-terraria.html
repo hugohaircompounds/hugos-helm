@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Terraria</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+:root {
+  --sky-top: #5cabff;
+  --sky-bottom: #8fc5ff;
+  --underground: #3e2d1c;
+  --underground-dark: #1e130a;
+  --wood: #8b5a2b;
+  --wood-dark: #5c3a1a;
+  --wood-hi: #b8864f;
+  --parchment: #f0dcb3;
+  --parchment-dark: #c6a272;
+  --panel: #4a3524;
+  --panel-light: #6a4d35;
+  --ink: #f9e8c0;
+  --ink-dark: #3a2410;
+  --common: #ffffff;
+  --uncommon: #54ff54;
+  --rare: #7dafff;
+  --epic: #e156dd;
+  --legendary: #ffdc00;
+  --cursed: #b93a3a;
+}
+* { box-sizing: border-box; image-rendering: pixelated; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--ink);
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 40%, var(--underground) 60%, var(--underground-dark) 100%);
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.5px;
+}
+.pixel { font-family: 'Press Start 2P', cursive; font-size: 9px; letter-spacing: 1px; text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.7); }
+
+/* parallax clouds */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(ellipse 120px 35px at 10% 12%, rgba(255,255,255,0.8), transparent 70%),
+    radial-gradient(ellipse 80px 25px at 45% 22%, rgba(255,255,255,0.5), transparent 70%),
+    radial-gradient(ellipse 110px 32px at 80% 8%, rgba(255,255,255,0.7), transparent 70%);
+}
+/* subtle ground pattern */
+body::after {
+  content: ""; position: fixed; bottom: 0; left: 0; right: 0; height: 40%; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top banner — like Terraria's wooden panel */
+.top {
+  background:
+    linear-gradient(180deg, var(--wood-hi) 0%, var(--wood) 50%, var(--wood-dark) 100%);
+  border-bottom: 3px solid var(--wood-dark);
+  padding: 14px 20px;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.15), inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+.top::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0,0,0,0.08) 0 2px, transparent 2px 22px);
+}
+
+.brand {
+  font-family: 'Press Start 2P', cursive; font-size: 22px; letter-spacing: 3px;
+  color: var(--legendary); text-shadow: 3px 3px 0 var(--ink-dark);
+  line-height: 1;
+}
+.brand-sub { font-size: 16px; color: var(--parchment); margin-left: 12px; font-family: 'VT323', monospace; }
+
+.timer-scroll {
+  background:
+    linear-gradient(180deg, var(--parchment), var(--parchment-dark));
+  border: 3px solid var(--wood-dark);
+  padding: 12px 20px;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center;
+  color: var(--ink-dark); text-shadow: none;
+  box-shadow: inset 0 2px 0 #fff7d4, inset 0 -2px 0 rgba(0,0,0,0.15);
+  position: relative;
+}
+.timer-scroll::before, .timer-scroll::after {
+  content: ""; position: absolute; top: -3px; bottom: -3px; width: 12px;
+  background: linear-gradient(180deg, var(--wood-hi), var(--wood), var(--wood-dark));
+  border: 3px solid var(--wood-dark);
+}
+.timer-scroll::before { left: -16px; }
+.timer-scroll::after { right: -16px; }
+
+.heart-container {
+  width: 44px; height: 40px;
+  background: var(--cursed);
+  clip-path: polygon(50% 15%, 61% 0, 85% 0, 100% 20%, 100% 45%, 50% 100%, 0 45%, 0 20%, 15% 0, 39% 0);
+  box-shadow: inset 2px 2px 0 #ff7070, inset -2px -3px 0 rgba(0,0,0,0.3);
+}
+
+.task-info .lbl { font-family: 'Press Start 2P', cursive; font-size: 9px; color: #7a5020; letter-spacing: 2px; }
+.task-info .name { font-size: 20px; color: var(--ink-dark); margin-top: 3px; }
+.clock-info { text-align: right; }
+.clock-info .lbl { font-family: 'Press Start 2P', cursive; font-size: 9px; color: #7a5020; letter-spacing: 2px; }
+.clock-info .clock { font-size: 26px; color: #20330e; font-weight: 900; letter-spacing: 2px; line-height: 1; }
+
+.btn {
+  background: linear-gradient(180deg, var(--wood-hi) 0%, var(--wood) 100%);
+  border: 2px solid var(--wood-dark);
+  color: var(--ink); font-family: 'Press Start 2P', cursive; font-size: 9px;
+  padding: 8px 14px; cursor: pointer; letter-spacing: 2px;
+  text-shadow: 1px 1px 0 var(--ink-dark);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.btn:hover { filter: brightness(1.1); }
+.btn.kill { background: linear-gradient(180deg, #d45555, #8a2a2a); }
+
+/* nav */
+.nav {
+  background: var(--panel);
+  border-bottom: 3px solid var(--underground-dark);
+  padding: 0;
+  display: flex;
+  box-shadow: inset 0 2px 0 var(--panel-light), inset 0 -2px 0 var(--underground-dark);
+}
+.tab {
+  padding: 10px 22px; font-family: 'Press Start 2P', cursive;
+  font-size: 10px; letter-spacing: 3px; color: var(--parchment);
+  cursor: pointer;
+  border-right: 2px solid var(--underground-dark);
+  text-shadow: 2px 2px 0 var(--ink-dark);
+}
+.tab.active { background: var(--panel-light); color: var(--legendary); }
+.tab:hover { background: rgba(255, 255, 255, 0.05); }
+
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 14px; padding: 0 10px; }
+.nstat { font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--parchment); letter-spacing: 2px; }
+.nstat strong { color: var(--legendary); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 340px; gap: 10px; padding: 12px; min-height: 0; }
+
+.panel-box {
+  background:
+    linear-gradient(180deg, var(--panel-light) 0%, var(--panel) 100%);
+  border: 3px solid var(--underground-dark);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -2px 0 rgba(0,0,0,0.3);
+}
+
+.panel-head {
+  background: linear-gradient(180deg, var(--wood) 0%, var(--wood-dark) 100%);
+  padding: 8px 14px;
+  border-bottom: 3px solid var(--underground-dark);
+  font-family: 'Press Start 2P', cursive; font-size: 10px; letter-spacing: 3px;
+  color: var(--legendary);
+  display: flex; justify-content: space-between; align-items: center;
+  text-shadow: 2px 2px 0 var(--ink-dark);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.panel-head .c { color: var(--parchment); }
+
+.panel-body { flex: 1; overflow: auto; padding: 8px; }
+
+/* task rows — inventory item slots with rarity borders */
+.inv-header {
+  padding: 6px 4px;
+  font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--parchment);
+  letter-spacing: 2px; border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 6px;
+  text-shadow: 2px 2px 0 var(--ink-dark);
+}
+
+.task {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid var(--panel);
+  padding: 6px 10px; margin-bottom: 4px;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.task:hover { background: rgba(0, 0, 0, 0.4); border-color: var(--wood); }
+.task.selected { border-color: var(--legendary); box-shadow: 0 0 10px rgba(255, 220, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.1); }
+.task.running { border-color: var(--uncommon); box-shadow: 0 0 10px rgba(84, 255, 84, 0.3); }
+
+.item-box {
+  width: 38px; height: 38px;
+  background: rgba(30, 20, 10, 0.8);
+  border: 2px solid var(--panel);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Press Start 2P', cursive; font-size: 10px; color: var(--legendary);
+  position: relative;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+.item-box.common { border-color: var(--common); color: var(--common); }
+.item-box.uncommon { border-color: var(--uncommon); color: var(--uncommon); }
+.item-box.rare { border-color: var(--rare); color: var(--rare); }
+.item-box.epic { border-color: var(--epic); color: var(--epic); }
+.item-box.legendary { border-color: var(--legendary); color: var(--legendary); box-shadow: 0 0 8px rgba(255, 220, 0, 0.6); }
+
+.task .n { font-size: 18px; color: var(--ink); }
+.task.running .n { color: var(--uncommon); }
+.task.selected .n { color: var(--legendary); }
+.task .m { font-size: 14px; color: var(--parchment-dark); margin-top: 2px; display: flex; gap: 8px; }
+.task .m .pill {
+  font-family: 'Press Start 2P', cursive; font-size: 8px;
+  padding: 2px 6px; letter-spacing: 1px;
+  background: rgba(0, 0, 0, 0.4); border: 1px solid var(--panel);
+}
+.task .m .pill.urg { color: var(--cursed); border-color: var(--cursed); }
+.task .m .pill.hi { color: var(--legendary); border-color: var(--legendary); }
+
+.use {
+  background: linear-gradient(180deg, #4a8a32 0%, #2a5a1a 100%);
+  border: 2px solid #183d0a;
+  color: var(--ink); font-family: 'Press Start 2P', cursive; font-size: 9px;
+  padding: 6px 12px; cursor: pointer; letter-spacing: 2px;
+  text-shadow: 1px 1px 0 var(--ink-dark); box-shadow: inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.use.stop { background: linear-gradient(180deg, #c04040 0%, #701a1a 100%); border-color: #400808; }
+
+/* detail — parchment scroll look */
+.detail {
+  background:
+    linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+  margin: 4px; padding: 16px 20px;
+  color: var(--ink-dark); text-shadow: none;
+  border: 2px solid var(--wood-dark);
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: inset 0 2px 0 #fff7d4;
+}
+.detail .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.detail .badge {
+  font-family: 'Press Start 2P', cursive; font-size: 9px;
+  padding: 4px 8px; letter-spacing: 2px;
+  background: rgba(0, 0, 0, 0.1); border: 1px solid var(--wood-dark); color: var(--ink-dark);
+}
+.detail .badge.active { background: var(--uncommon); color: var(--ink-dark); border-color: #2a5a1a; }
+.detail .badge.urg { background: var(--cursed); color: var(--ink); border-color: #400808; text-shadow: 1px 1px 0 #000; }
+
+.scroll-field {
+  background: #fff5d5;
+  border: 2px solid var(--wood-dark);
+  padding: 8px 10px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+}
+.scroll-field label {
+  display: block; font-family: 'Press Start 2P', cursive; font-size: 9px;
+  color: var(--wood-dark); margin-bottom: 6px; letter-spacing: 2px;
+}
+.scroll-field input, .scroll-field select, .scroll-field textarea {
+  width: 100%; background: transparent; color: var(--ink-dark);
+  border: none; padding: 3px 0; font-family: 'VT323', monospace; font-size: 18px; outline: none;
+}
+.scroll-field textarea { min-height: 100px; line-height: 1.3; resize: vertical; }
+
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+.quest-list .qh {
+  font-family: 'Press Start 2P', cursive; font-size: 10px; color: var(--wood-dark); letter-spacing: 2px;
+  padding: 6px 0; margin-bottom: 6px;
+  border-bottom: 1px solid rgba(92, 58, 26, 0.3);
+}
+.q {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 4px 6px; align-items: center;
+  background: rgba(0, 0, 0, 0.05); margin-bottom: 3px; font-size: 16px;
+}
+.q .mark {
+  font-family: 'Press Start 2P', cursive; font-size: 11px;
+  color: var(--wood-dark);
+}
+.q.done .mark { color: #2a5a1a; }
+.q.done { color: var(--wood-dark); }
+
+/* sidebar */
+.sidebar { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.sidebar .panel-box { flex: 1; min-height: 0; }
+
+.day {
+  padding: 6px 12px; font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--parchment); letter-spacing: 2px;
+  background: rgba(0, 0, 0, 0.3); text-shadow: 2px 2px 0 var(--ink-dark);
+}
+.day.today { color: var(--legendary); background: rgba(255, 220, 0, 0.1); }
+
+.ev { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; padding: 6px 12px; align-items: center; cursor: pointer; border-bottom: 1px solid rgba(0, 0, 0, 0.3); }
+.ev:hover { background: rgba(255, 255, 255, 0.05); }
+.ev .gem { width: 12px; height: 12px; transform: rotate(45deg); background: var(--rare); box-shadow: inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.3); }
+.ev .t { font-size: 17px; color: var(--ink); }
+.ev .w { font-family: 'Press Start 2P', cursive; font-size: 8px; color: var(--parchment-dark); letter-spacing: 1px; margin-top: 2px; }
+.ev .tm { font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--legendary); }
+
+.em { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid rgba(0, 0, 0, 0.3); }
+.em.unread { background: rgba(255, 220, 0, 0.06); border-left: 3px solid var(--legendary); padding-left: 9px; }
+.em:hover { background: rgba(255, 255, 255, 0.05); }
+.em .from { display: flex; justify-content: space-between; font-family: 'Press Start 2P', cursive; font-size: 9px; color: var(--parchment-dark); letter-spacing: 2px; }
+.em.unread .from .n { color: var(--legendary); }
+.em .subj { font-size: 17px; color: var(--ink); margin-top: 3px; }
+.em .snip { font-size: 14px; color: var(--parchment-dark); margin-top: 2px; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div>
+      <div class="brand">HELM</div>
+      <div class="brand-sub" style="font-family: 'VT323'; margin-top: 4px; color: var(--parchment);">Adventurer's Log</div>
+    </div>
+    <div class="timer-scroll">
+      <div class="heart-container"></div>
+      <div class="task-info">
+        <div class="lbl">◈ CURRENT QUEST</div>
+        <div class="name">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div class="clock-info">
+        <div class="lbl">◈ TIME</div>
+        <div class="clock">02:47:13</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn">SYNC</button>
+      <button class="btn kill">STOP</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="tab active">⚔ TASKS</div>
+    <div class="tab">⌛ TIMESHEET</div>
+    <div class="tab">⚙ SETTINGS</div>
+    <div class="nav-right">
+      <span class="nstat">QUESTS <strong>14</strong></span>
+      <span class="nstat">ACTIVE <strong>3</strong></span>
+      <span class="nstat">● ONLINE</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="panel-box">
+      <div class="panel-head"><span>⚔ QUEST LOG</span><span class="c">14 / 99</span></div>
+      <div class="panel-body">
+        <div class="inv-header">◈ IN PROGRESS</div>
+        <div class="task selected running">
+          <div class="item-box legendary">P9</div>
+          <div>
+            <div class="n">Complete Phase 09 discovery pipeline</div>
+            <div class="m">
+              <span class="pill urg">URGENT</span>
+              <span class="pill">CCH-AGENT</span>
+            </div>
+          </div>
+          <button class="use stop">STOP</button>
+        </div>
+        <div class="task">
+          <div class="item-box epic">RF</div>
+          <div>
+            <div class="n">Refactor creator filter pre-DB load</div>
+            <div class="m"><span class="pill hi">HIGH</span><span class="pill">INGEST</span></div>
+          </div>
+          <button class="use">USE</button>
+        </div>
+        <div class="task">
+          <div class="item-box common">CE</div>
+          <div>
+            <div class="n">Checking Email/ClickUp</div>
+            <div class="m"><span class="pill">NORMAL</span></div>
+          </div>
+          <button class="use">USE</button>
+        </div>
+
+        <div class="inv-header" style="margin-top: 10px;">◈ OPEN</div>
+        <div class="task">
+          <div class="item-box rare">MS</div>
+          <div>
+            <div class="n">Monday Stand Up - Weekly Planning</div>
+            <div class="m"><span class="pill">STANDUP</span></div>
+          </div>
+          <button class="use">USE</button>
+        </div>
+        <div class="task">
+          <div class="item-box uncommon">SF</div>
+          <div>
+            <div class="n">Review Sina feedback on agent pitch</div>
+            <div class="m"><span class="pill hi">HIGH</span><span class="pill">SALES</span></div>
+          </div>
+          <button class="use">USE</button>
+        </div>
+        <div class="task">
+          <div class="item-box" style="border-color: var(--cursed); color: var(--cursed);">IC</div>
+          <div>
+            <div class="n">Reactivate IC_API_KEY trial</div>
+            <div class="m"><span class="pill urg">URGENT</span><span class="pill">BLOCKED</span></div>
+          </div>
+          <button class="use">USE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="panel-head"><span>◈ ITEM DETAILS</span><span class="c">#247</span></div>
+      <div class="panel-body detail">
+        <div class="badges">
+          <span class="badge active">● IN PROGRESS</span>
+          <span class="badge urg">URGENT</span>
+          <span class="badge">CCH-AGENT</span>
+          <span class="badge">DUE 04/24</span>
+        </div>
+        <div class="scroll-field">
+          <label>▓ TITLE</label>
+          <input value="Complete Phase 09 discovery pipeline" />
+        </div>
+        <div class="row-3">
+          <div class="scroll-field"><label>STATUS</label><input value="in progress" /></div>
+          <div class="scroll-field"><label>PRIORITY</label>
+            <select><option>URGENT</option><option>HIGH</option></select>
+          </div>
+          <div class="scroll-field"><label>DUE</label><input type="date" value="2026-04-24" /></div>
+        </div>
+        <div class="scroll-field">
+          <label>▓ DESCRIPTION</label>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load
+- Add spot-check template for first approved cohort</textarea>
+        </div>
+        <div class="quest-list">
+          <div class="qh">★ OBJECTIVES</div>
+          <div class="q done"><span class="mark">[✓]</span><span>09-01 data_completeness format</span></div>
+          <div class="q done"><span class="mark">[✓]</span><span>09-02 import cleanup</span></div>
+          <div class="q"><span class="mark">[ ]</span><span>09-03 spot-check template</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="panel-box">
+        <div class="panel-head"><span>◈ SCHEDULE</span><span class="c">7D</span></div>
+        <div class="panel-body" style="padding: 0;">
+          <div class="day today">► TODAY · THU APR 23</div>
+          <div class="ev"><div class="gem" style="background: var(--legendary);"></div><div><div class="t">Standup: Daily</div><div class="w">VITABAE</div></div><div class="tm">09:30</div></div>
+          <div class="ev"><div class="gem" style="background: var(--uncommon);"></div><div><div class="t">1:1 with Isaac</div><div class="w">WORK</div></div><div class="tm">11:00</div></div>
+          <div class="day">FRI APR 24</div>
+          <div class="ev"><div class="gem" style="background: var(--cursed);"></div><div><div class="t">Phase 09 review</div><div class="w">VITABAE</div></div><div class="tm">14:00</div></div>
+          <div class="ev"><div class="gem" style="background: var(--epic);"></div><div><div class="t">EOW report</div><div class="w">WORK</div></div><div class="tm">16:30</div></div>
+        </div>
+      </div>
+      <div class="panel-box">
+        <div class="panel-head"><span>◈ MAIL</span><span class="c">3 NEW</span></div>
+        <div class="panel-body" style="padding: 0;">
+          <div class="em unread">
+            <div class="from"><span class="n">SINA NEKOUEI</span><span>10:12</span></div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on institutional-memory angle…</div>
+          </div>
+          <div class="em unread">
+            <div class="from"><span class="n">CLICKUP</span><span>09:44</span></div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned "Draft Q3 tracking"…</div>
+          </div>
+          <div class="em">
+            <div class="from"><span class="n">MODASH</span><span>YESTERDAY</span></div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,932 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * THEME SYSTEM
+ * ============
+ * Theme is (themeId, mode). Selector: [data-theme='x'][data-mode='dark'|'light'].
+ * Colors are space-separated RGB triples so Tailwind's opacity modifier syntax
+ * (bg-danger/20) composes via rgb(var(--x) / <alpha-value>).
+ *
+ * Fonts are per-theme (mode doesn't flip fonts).
+ *
+ * Decorative overlays and per-theme variants of task pills, timer bar
+ * internals, etc. live at the bottom of this file — they target stable
+ * data-slot="..." anchors on structural components so JSX stays theme-agnostic.
+ */
+
+/* ====================================================== BASE TOKENS ======= */
+
+/* Root defaults — default theme / dark mode. */
+:root,
+[data-theme='default'][data-mode='dark'] {
+  --bg: 15 17 21;
+  --panel: 22 26 33;
+  --panel-hi: 30 35 44;
+  --border: 38 44 55;
+  --ink: 230 232 236;
+  --ink-muted: 139 147 167;
+  --accent: 122 162 255;
+  --success: 74 222 128;
+  --warn: 251 191 36;
+  --danger: 248 113 113;
+  --scrollbar: #2a3140;
+}
+
+[data-theme='default'][data-mode='light'] {
+  --bg: 255 255 255;
+  --panel: 246 247 249;
+  --panel-hi: 236 238 242;
+  --border: 217 221 228;
+  --ink: 27 31 39;
+  --ink-muted: 96 106 123;
+  --accent: 37 99 235;
+  --success: 21 128 61;
+  --warn: 180 83 9;
+  --danger: 185 28 28;
+  --scrollbar: #c7ccd4;
+}
+
+/* -------- TACTICAL HUD ---------------------------------------------------- */
+[data-theme='tactical-hud'][data-mode='dark'] {
+  --bg: 10 14 20;
+  --panel: 15 20 28;
+  --panel-hi: 21 28 39;
+  --border: 34 48 70;
+  --ink: 212 219 230;
+  --ink-muted: 106 120 144;
+  --accent: 0 224 255;
+  --success: 38 255 133;
+  --warn: 255 158 0;
+  --danger: 255 64 96;
+  --scrollbar: #2d4666;
+}
+[data-theme='tactical-hud'][data-mode='light'] {
+  --bg: 232 238 246;
+  --panel: 244 248 253;
+  --panel-hi: 222 232 244;
+  --border: 190 208 228;
+  --ink: 16 28 48;
+  --ink-muted: 76 100 130;
+  --accent: 0 131 156;
+  --success: 30 140 75;
+  --warn: 185 100 10;
+  --danger: 185 28 50;
+  --scrollbar: #b5c8de;
+}
+
+/* -------- ETHEREAL -------------------------------------------------------- */
+[data-theme='ethereal'][data-mode='dark'] {
+  --bg: 10 15 28;
+  --panel: 18 24 42;
+  --panel-hi: 26 34 56;
+  --border: 34 42 64;
+  --ink: 232 235 242;
+  --ink-muted: 123 132 153;
+  --accent: 122 162 255;
+  --success: 95 227 122;
+  --warn: 255 166 114;
+  --danger: 255 122 145;
+  --scrollbar: #2a3552;
+}
+[data-theme='ethereal'][data-mode='light'] {
+  --bg: 244 246 252;
+  --panel: 252 253 255;
+  --panel-hi: 234 238 248;
+  --border: 210 220 238;
+  --ink: 24 32 56;
+  --ink-muted: 100 112 140;
+  --accent: 60 100 210;
+  --success: 40 140 80;
+  --warn: 190 90 30;
+  --danger: 185 48 80;
+  --scrollbar: #c8d2e4;
+}
+
+/* -------- NEON ------------------------------------------------------------ */
+[data-theme='neon'][data-mode='dark'] {
+  --bg: 8 6 13;
+  --panel: 13 10 22;
+  --panel-hi: 22 16 31;
+  --border: 37 29 58;
+  --ink: 224 218 240;
+  --ink-muted: 122 109 150;
+  --accent: 255 0 170;
+  --success: 0 255 133;
+  --warn: 255 243 58;
+  --danger: 255 59 92;
+  --scrollbar: #3b2a5e;
+}
+[data-theme='neon'][data-mode='light'] {
+  --bg: 248 244 252;
+  --panel: 255 250 255;
+  --panel-hi: 240 230 250;
+  --border: 214 198 230;
+  --ink: 40 20 60;
+  --ink-muted: 120 100 144;
+  --accent: 210 20 140;
+  --success: 20 160 85;
+  --warn: 185 110 5;
+  --danger: 200 30 60;
+  --scrollbar: #d0bae0;
+}
+
+/* -------- CYBERPUNK ------------------------------------------------------- */
+[data-theme='cyberpunk'][data-mode='dark'] {
+  --bg: 13 13 13;
+  --panel: 20 20 20;
+  --panel-hi: 31 31 31;
+  --border: 42 42 42;
+  --ink: 245 245 245;
+  --ink-muted: 136 136 136;
+  --accent: 252 238 10;
+  --success: 0 240 255;
+  --warn: 255 158 0;
+  --danger: 255 0 60;
+  --scrollbar: #3a3a3a;
+}
+[data-theme='cyberpunk'][data-mode='light'] {
+  --bg: 245 245 240;
+  --panel: 252 252 248;
+  --panel-hi: 235 235 225;
+  --border: 210 210 200;
+  --ink: 10 10 10;
+  --ink-muted: 110 110 100;
+  --accent: 200 180 0;
+  --success: 0 130 160;
+  --warn: 200 100 0;
+  --danger: 200 10 50;
+  --scrollbar: #c6c6b6;
+}
+
+/* -------- TERRARIA -------------------------------------------------------- */
+[data-theme='terraria'][data-mode='dark'] {
+  --bg: 42 31 20;
+  --panel: 74 53 36;
+  --panel-hi: 106 77 53;
+  --border: 30 19 10;
+  --ink: 249 232 192;
+  --ink-muted: 198 162 114;
+  --accent: 255 220 0;
+  --success: 84 255 84;
+  --warn: 212 154 75;
+  --danger: 185 58 58;
+  --scrollbar: #3a2410;
+}
+[data-theme='terraria'][data-mode='light'] {
+  --bg: 200 180 145;
+  --panel: 218 196 162;
+  --panel-hi: 232 212 180;
+  --border: 128 96 64;
+  --ink: 50 32 16;
+  --ink-muted: 110 84 55;
+  --accent: 180 120 10;
+  --success: 30 120 40;
+  --warn: 180 110 30;
+  --danger: 160 40 40;
+  --scrollbar: #bea37a;
+}
+
+/* -------- FACTORIO -------------------------------------------------------- */
+[data-theme='factorio'][data-mode='dark'] {
+  --bg: 26 26 26;
+  --panel: 42 42 42;
+  --panel-hi: 58 58 58;
+  --border: 15 15 15;
+  --ink: 232 224 200;
+  --ink-muted: 138 129 112;
+  --accent: 255 157 63;
+  --success: 110 200 72;
+  --warn: 240 208 78;
+  --danger: 228 60 60;
+  --scrollbar: #5a5a5a;
+}
+[data-theme='factorio'][data-mode='light'] {
+  --bg: 210 204 192;
+  --panel: 228 222 208;
+  --panel-hi: 240 234 220;
+  --border: 120 110 90;
+  --ink: 40 32 18;
+  --ink-muted: 100 90 70;
+  --accent: 210 110 20;
+  --success: 70 140 40;
+  --warn: 180 140 20;
+  --danger: 170 40 40;
+  --scrollbar: #b8b0a0;
+}
+
+/* -------- RISK OF RAIN 2 -------------------------------------------------- */
+[data-theme='ror2'][data-mode='dark'] {
+  --bg: 10 22 40;
+  --panel: 15 31 51;
+  --panel-hi: 26 45 70;
+  --border: 30 51 82;
+  --ink: 228 237 245;
+  --ink-muted: 154 168 188;
+  --accent: 92 204 255;
+  --success: 128 255 128;
+  --warn: 255 208 0;
+  --danger: 255 56 56;
+  --scrollbar: #1e3352;
+}
+[data-theme='ror2'][data-mode='light'] {
+  --bg: 224 236 248;
+  --panel: 246 250 254;
+  --panel-hi: 232 242 252;
+  --border: 170 200 228;
+  --ink: 10 24 46;
+  --ink-muted: 80 104 134;
+  --accent: 20 130 190;
+  --success: 30 140 60;
+  --warn: 180 130 10;
+  --danger: 185 45 50;
+  --scrollbar: #b0c8de;
+}
+
+/* ======================================================== FONTS + LS ====== */
+
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: var(--font-sans);
+  --ls-nav: 0.025em;
+  --letter-transform: none;
+  --panel-radius: 0px;
+}
+[data-theme='tactical-hud'] {
+  --font-sans: 'Rajdhani', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --ls-nav: 0.15em;
+  --letter-transform: uppercase;
+}
+[data-theme='ethereal'] {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --panel-radius: 14px;
+  --ls-nav: 0.05em;
+}
+[data-theme='neon'] {
+  --font-sans: 'Space Grotesk', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --ls-nav: 0.18em;
+  --letter-transform: uppercase;
+}
+[data-theme='cyberpunk'] {
+  --font-sans: 'Rajdhani', sans-serif;
+  --font-mono: 'Share Tech Mono', monospace;
+  --ls-nav: 0.2em;
+  --letter-transform: uppercase;
+}
+[data-theme='terraria'] {
+  --font-sans: 'VT323', monospace;
+  --font-mono: 'Press Start 2P', monospace;
+  --ls-nav: 0.1em;
+}
+[data-theme='factorio'] {
+  --font-sans: 'JetBrains Mono', monospace;
+  --font-mono: 'Share Tech Mono', monospace;
+  --ls-nav: 0.15em;
+  --letter-transform: uppercase;
+}
+[data-theme='ror2'] {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Bebas Neue', sans-serif;
+  --ls-nav: 0.12em;
+}
+
+/* ========================================================== GLOBAL ======= */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  overflow: hidden;
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-slot='nav-tab'] {
+  letter-spacing: var(--ls-nav);
+  text-transform: var(--letter-transform, none);
+}
+
+/* ======================================================= TASK PILLS ====== */
+
+[data-slot='task-pill'] {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: rgb(var(--panel-hi));
+  border: 1px solid rgb(var(--border));
+  color: rgb(var(--ink-muted));
+  border-radius: 2px;
+  font-weight: 600;
+  line-height: 18px;
+}
+[data-slot='task-pill'][data-priority='urgent'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+}
+[data-slot='task-pill'][data-priority='high'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+[data-slot='task-pill'][data-priority='normal'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+}
+[data-slot='task-pill'][data-priority='low'] {
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* Status pill — colored by ClickUp's per-status color (inline --status-color)
+   so it matches the section-header dots in the task list. */
+[data-slot='task-pill'][data-kind='status'] {
+  color: var(--status-color, rgb(var(--ink-muted)));
+  border-color: var(--status-color, rgb(var(--border)));
+}
+
+/* Work category (list) pill — subtle accent tint. */
+[data-slot='task-pill'][data-kind='list'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent) / 0.5);
+}
+
+/* Due-date urgency. Default (no data-urgency) inherits the neutral pill look. */
+[data-slot='task-pill'][data-kind='due'][data-urgency='overdue'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+}
+[data-slot='task-pill'][data-kind='due'][data-urgency='soon'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+
+/* Ethereal: softer, pill-shaped, no border */
+[data-theme='ethereal'] [data-slot='task-pill'] {
+  border: none;
+  border-radius: 100px;
+  background: rgb(var(--panel-hi));
+  color: rgb(var(--ink-muted));
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+[data-theme='ethereal'] [data-slot='task-pill'][data-priority='urgent'] {
+  background: rgb(var(--danger) / 0.12);
+  color: rgb(var(--danger));
+}
+[data-theme='ethereal'] [data-slot='task-pill'][data-priority='high'] {
+  background: rgb(var(--warn) / 0.15);
+  color: rgb(var(--warn));
+}
+[data-theme='ethereal'] [data-slot='task-pill'][data-priority='normal'] {
+  background: rgb(var(--accent) / 0.12);
+  color: rgb(var(--accent));
+}
+[data-theme='ethereal'] [data-slot='task-pill'][data-priority='low'] {
+  background: rgb(var(--ink-muted) / 0.12);
+  color: rgb(var(--ink-muted));
+}
+
+/* Neon: glowing, brutal */
+[data-theme='neon'] [data-slot='task-pill'] {
+  background: rgb(var(--bg));
+  border-color: rgb(var(--ink-muted));
+  color: rgb(var(--ink-muted));
+}
+[data-theme='neon'] [data-slot='task-pill'][data-priority='urgent'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+  box-shadow: 0 0 6px rgb(var(--danger) / 0.4);
+}
+[data-theme='neon'] [data-slot='task-pill'][data-priority='high'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+[data-theme='neon'] [data-slot='task-pill'][data-priority='normal'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+  box-shadow: 0 0 6px rgb(var(--accent) / 0.3);
+}
+[data-theme='neon'] [data-slot='task-pill'][data-priority='low'] {
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* Cyberpunk: solid slabs when urgent */
+[data-theme='cyberpunk'] [data-slot='task-pill'] {
+  background: rgb(var(--panel-hi));
+  border-color: rgb(var(--border));
+  color: rgb(var(--ink-muted));
+  font-weight: 700;
+}
+[data-theme='cyberpunk'] [data-slot='task-pill'][data-priority='urgent'] {
+  background: rgb(var(--danger));
+  color: rgb(var(--bg));
+  border-color: rgb(var(--danger));
+}
+[data-theme='cyberpunk'] [data-slot='task-pill'][data-priority='high'] {
+  background: rgb(var(--accent));
+  color: rgb(var(--bg));
+  border-color: rgb(var(--accent));
+}
+/* cyberpunk's --accent is yellow (used by "high" slab) so "normal" uses --success (cyan)
+   to stay visually distinct while keeping the blue-family read. */
+[data-theme='cyberpunk'] [data-slot='task-pill'][data-priority='normal'] {
+  background: rgb(var(--success));
+  color: rgb(var(--bg));
+  border-color: rgb(var(--success));
+}
+[data-theme='cyberpunk'] [data-slot='task-pill'][data-priority='low'] {
+  background: rgb(var(--panel-hi));
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* Terraria: chunky pixel bevels */
+[data-theme='terraria'] [data-slot='task-pill'] {
+  background: rgb(var(--bg));
+  border: 2px solid rgb(var(--border));
+  border-top-color: rgb(var(--panel-hi));
+  border-left-color: rgb(var(--panel-hi));
+  color: rgb(var(--ink));
+  font-weight: 400;
+  text-shadow: 1px 1px 0 rgb(0 0 0 / 0.5);
+}
+[data-theme='terraria'] [data-slot='task-pill'][data-priority='urgent'] {
+  background: rgb(var(--danger) / 0.6);
+  color: rgb(var(--ink));
+}
+[data-theme='terraria'] [data-slot='task-pill'][data-priority='high'] {
+  background: rgb(var(--accent) / 0.3);
+  color: rgb(var(--accent));
+}
+/* terraria's --accent is yellow/gold (used by "high") — use success-green for normal
+   so the two priorities stay readable side-by-side. */
+[data-theme='terraria'] [data-slot='task-pill'][data-priority='normal'] {
+  background: rgb(var(--success) / 0.25);
+  color: rgb(var(--success));
+}
+[data-theme='terraria'] [data-slot='task-pill'][data-priority='low'] {
+  background: rgb(var(--ink-muted) / 0.2);
+  color: rgb(var(--ink-muted));
+}
+
+/* Factorio: terminal tag, mono */
+[data-theme='factorio'] [data-slot='task-pill'] {
+  background: rgb(var(--border));
+  border-color: #5a5a5a;
+  color: rgb(var(--ink-muted));
+  font-family: 'Share Tech Mono', monospace;
+}
+[data-theme='factorio'] [data-slot='task-pill'][data-priority='urgent'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+}
+[data-theme='factorio'] [data-slot='task-pill'][data-priority='high'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+[data-theme='factorio'] [data-slot='task-pill'][data-priority='normal'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+}
+[data-theme='factorio'] [data-slot='task-pill'][data-priority='low'] {
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* RoR2: clean with colored borders for rarity */
+[data-theme='ror2'] [data-slot='task-pill'] {
+  background: rgb(var(--bg) / 0.8);
+  border-color: rgb(var(--panel-hi));
+  color: rgb(var(--ink));
+  font-weight: 500;
+  letter-spacing: 0.15em;
+}
+[data-theme='ror2'] [data-slot='task-pill'][data-priority='urgent'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+  box-shadow: 0 0 8px rgb(var(--danger) / 0.25);
+}
+[data-theme='ror2'] [data-slot='task-pill'][data-priority='high'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+[data-theme='ror2'] [data-slot='task-pill'][data-priority='normal'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+  box-shadow: 0 0 8px rgb(var(--accent) / 0.2);
+}
+[data-theme='ror2'] [data-slot='task-pill'][data-priority='low'] {
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* Tactical: sharper, mono digits */
+[data-theme='tactical-hud'] [data-slot='task-pill'] {
+  background: rgb(var(--bg));
+  border-color: rgb(var(--border));
+  color: rgb(var(--ink-muted));
+  font-weight: 700;
+}
+[data-theme='tactical-hud'] [data-slot='task-pill'][data-priority='urgent'] {
+  color: rgb(var(--danger));
+  border-color: rgb(var(--danger));
+}
+[data-theme='tactical-hud'] [data-slot='task-pill'][data-priority='high'] {
+  color: rgb(var(--warn));
+  border-color: rgb(var(--warn));
+}
+[data-theme='tactical-hud'] [data-slot='task-pill'][data-priority='normal'] {
+  color: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+}
+[data-theme='tactical-hud'] [data-slot='task-pill'][data-priority='low'] {
+  color: rgb(var(--ink-muted));
+  border-color: rgb(var(--ink-muted));
+}
+
+/* ========================================= PANEL / TIMER-BAR OVERLAYS ==== */
+
+/* -- TACTICAL HUD: grid background + corner brackets on panels ------------ */
+[data-theme='tactical-hud'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(rgb(var(--border)) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--border)) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.25;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
+}
+[data-theme='tactical-hud'] [data-slot='panel'] {
+  position: relative;
+}
+[data-theme='tactical-hud'] [data-slot='panel']::before,
+[data-theme='tactical-hud'] [data-slot='panel']::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: rgb(var(--accent));
+  pointer-events: none;
+  z-index: 2;
+}
+[data-theme='tactical-hud'] [data-slot='panel']::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+[data-theme='tactical-hud'] [data-slot='panel']::after {
+  top: 0;
+  right: 0;
+  border-top: 2px solid;
+  border-right: 2px solid;
+}
+[data-theme='tactical-hud'] [data-slot='timer-bar'] {
+  border-bottom: 2px solid rgb(var(--accent) / 0.6);
+  box-shadow: inset 0 -8px 12px -10px rgb(var(--accent) / 0.4);
+}
+
+/* -- ETHEREAL: glass + starfield ----------------------------------------- */
+[data-theme='ethereal'][data-mode='dark'] body {
+  background: radial-gradient(ellipse 80% 50% at 20% 0%, rgb(122 162 255 / 0.12), transparent 60%),
+    radial-gradient(ellipse 60% 60% at 90% 100%, rgb(196 167 255 / 0.1), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgb(95 227 209 / 0.06), transparent 70%),
+    linear-gradient(180deg, rgb(var(--bg)), #010509);
+}
+[data-theme='ethereal'][data-mode='light'] body {
+  background: radial-gradient(ellipse 80% 50% at 20% 0%, rgb(122 162 255 / 0.08), transparent 60%),
+    radial-gradient(ellipse 60% 60% at 90% 100%, rgb(196 167 255 / 0.06), transparent 60%),
+    linear-gradient(180deg, rgb(var(--bg)), #e8edf5);
+}
+[data-theme='ethereal'][data-mode='dark'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(1px 1px at 20% 30%, rgb(255 255 255 / 0.5), transparent),
+    radial-gradient(1px 1px at 60% 70%, rgb(255 255 255 / 0.3), transparent),
+    radial-gradient(1px 1px at 80% 20%, rgb(255 255 255 / 0.4), transparent),
+    radial-gradient(1px 1px at 35% 85%, rgb(255 255 255 / 0.35), transparent);
+  background-size: 600px 600px;
+  opacity: 0.5;
+}
+[data-theme='ethereal'] [data-slot='panel'] {
+  background: rgb(var(--panel) / 0.6) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 14px;
+  border: 1px solid rgb(var(--border));
+  box-shadow: 0 8px 40px rgb(0 0 0 / 0.25), inset 0 1px 0 rgb(255 255 255 / 0.04);
+}
+[data-theme='ethereal'][data-mode='light'] [data-slot='panel'] {
+  box-shadow: 0 4px 24px rgb(0 40 90 / 0.08), inset 0 1px 0 rgb(255 255 255 / 0.4);
+}
+[data-theme='ethereal'] [data-slot='timer-bar'] {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgb(var(--panel) / 0.5) !important;
+}
+
+/* -- NEON: dense grid + animated gradient strip -------------------------- */
+[data-theme='neon'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(rgb(var(--accent) / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--success) / 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+[data-theme='neon'] [data-slot='timer-bar']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgb(var(--accent)), rgb(var(--success)), rgb(var(--warn)), rgb(var(--accent)));
+  background-size: 200% 100%;
+  animation: neon-slide 6s linear infinite;
+  box-shadow: 0 0 10px rgb(var(--accent) / 0.5);
+}
+@keyframes neon-slide {
+  to {
+    background-position: 200% 0;
+  }
+}
+
+/* -- CYBERPUNK: scanlines + thick yellow rule ---------------------------- */
+[data-theme='cyberpunk'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 3px,
+    rgb(var(--accent) / 0.03) 3px,
+    rgb(var(--accent) / 0.03) 4px
+  );
+}
+[data-theme='cyberpunk'] [data-slot='timer-bar'] {
+  border-bottom: 3px solid rgb(var(--accent)) !important;
+}
+[data-theme='cyberpunk'] button {
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+/* -- TERRARIA: wood frames + pixel rendering ----------------------------- */
+[data-theme='terraria'] {
+  image-rendering: pixelated;
+}
+[data-theme='terraria'][data-mode='dark'] body {
+  background: linear-gradient(180deg, #5cabff 0%, #8fc5ff 30%, rgb(var(--bg)) 70%, #1e130a 100%);
+}
+[data-theme='terraria'][data-mode='light'] body {
+  background: linear-gradient(180deg, #a8d4ff 0%, #d9eaff 30%, rgb(var(--bg)) 70%, #bea57a 100%);
+}
+[data-theme='terraria'] body::before {
+  content: '';
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  z-index: -1;
+  pointer-events: none;
+  background-image: linear-gradient(rgb(0 0 0 / 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(0 0 0 / 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+[data-theme='terraria'] [data-slot='panel'],
+[data-theme='terraria'] [data-slot='timer-bar'] {
+  box-shadow: inset 2px 2px 0 rgb(255 255 255 / 0.1), inset -2px -2px 0 rgb(0 0 0 / 0.3);
+  border: 2px solid rgb(var(--border)) !important;
+}
+[data-theme='terraria'][data-mode='dark'] body {
+  text-shadow: 2px 2px 0 rgb(0 0 0 / 0.5);
+}
+
+/* -- FACTORIO: rivets + LED sheen --------------------------------------- */
+[data-theme='factorio'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: rgb(var(--bg));
+  background-image: linear-gradient(rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+    radial-gradient(circle at 0 0, #6a6a6a 1.5px, transparent 2px);
+  background-size: 32px 32px, 32px 32px, 32px 32px;
+}
+[data-theme='factorio'][data-mode='light'] body::before {
+  background-image: linear-gradient(rgb(0 0 0 / 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(0 0 0 / 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 0 0, #8a8070 1.5px, transparent 2px);
+}
+[data-theme='factorio'] [data-slot='panel'] {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  border: 1px solid rgb(var(--border)) !important;
+}
+[data-theme='factorio'] [data-slot='timer-bar'] {
+  background: linear-gradient(180deg, rgb(var(--panel-hi)), rgb(var(--panel)) 60%, rgb(var(--bg))) !important;
+  border-bottom: 3px solid rgb(var(--border)) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* -- ROR2: teleporter glow + starfield ---------------------------------- */
+[data-theme='ror2'][data-mode='dark'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 50% at 50% 0%, rgb(var(--accent) / 0.15), transparent 70%),
+    radial-gradient(ellipse 60% 60% at 50% 100%, rgb(var(--warn) / 0.05), transparent 70%);
+}
+[data-theme='ror2'][data-mode='dark'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(1px 1px at 20% 30%, rgb(255 255 255 / 0.4), transparent),
+    radial-gradient(1px 1px at 70% 60%, rgb(255 255 255 / 0.3), transparent),
+    radial-gradient(1px 1px at 40% 80%, rgb(255 255 255 / 0.3), transparent);
+  background-size: 500px 500px;
+  opacity: 0.5;
+}
+[data-theme='ror2'] [data-slot='timer-bar'] {
+  box-shadow: 0 0 24px rgb(var(--accent) / 0.15), inset 0 0 24px rgb(var(--accent) / 0.04);
+  border-bottom: 1px solid rgb(var(--accent) / 0.3) !important;
+}
+[data-theme='ror2'] [data-slot='panel'] {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgb(var(--panel) / 0.6) !important;
+  border: 1px solid rgb(var(--border)) !important;
+  position: relative;
+}
+[data-theme='ror2'] [data-slot='panel']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(var(--accent)), transparent);
+  opacity: 0.6;
+}
+
+/* ========================================= TIMER BAR INTERNAL SLOTS ===== */
+
+/* Theme-specific labels & clock face. */
+[data-slot='timer-indicator'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgb(var(--success));
+  animation: pulse-soft 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+[data-slot='timer-indicator'][data-state='idle'] {
+  background: rgb(var(--ink-muted));
+  animation: none;
+}
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.3); }
+}
+[data-slot='timer-clock'] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+/* Ethereal: rounded timer pill */
+[data-theme='ethereal'] [data-slot='timer-bar'] [data-slot='timer-task'] {
+  font-weight: 500;
+}
+[data-theme='ethereal'] [data-slot='timer-indicator'] {
+  box-shadow: 0 0 14px rgb(var(--success) / 0.7);
+}
+
+/* Neon/Cyberpunk/Factorio: bigger, louder clock */
+[data-theme='neon'] [data-slot='timer-clock'],
+[data-theme='cyberpunk'] [data-slot='timer-clock'],
+[data-theme='factorio'] [data-slot='timer-clock'] {
+  font-size: 18px;
+  text-shadow: 0 0 8px rgb(var(--accent) / 0.5);
+}
+
+/* Terraria: pixel clock with hard shadow */
+[data-theme='terraria'] [data-slot='timer-clock'] {
+  font-family: 'VT323', monospace;
+  font-size: 20px;
+  letter-spacing: 0.15em;
+  color: rgb(var(--accent));
+  text-shadow: 2px 2px 0 rgb(0 0 0 / 0.6);
+}
+
+/* RoR2: Bebas Neue clock */
+[data-theme='ror2'] [data-slot='timer-clock'] {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 22px;
+  letter-spacing: 0.15em;
+  color: rgb(var(--accent));
+  text-shadow: 0 0 12px rgb(var(--accent) / 0.5);
+}
+[data-theme='ror2'] [data-slot='timer-indicator'] {
+  background: rgb(var(--warn));
+  box-shadow: 0 0 10px rgb(var(--warn));
+}
+
+/* Factorio: mono clock tinted green */
+[data-theme='factorio'] [data-slot='timer-clock'] {
+  color: rgb(var(--success));
+  font-family: 'Share Tech Mono', monospace;
+  text-shadow: 0 0 10px rgb(var(--success) / 0.5);
+}
+
+/* Cyberpunk: yellow clock */
+[data-theme='cyberpunk'] [data-slot='timer-clock'] {
+  color: rgb(var(--accent));
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* Timer bar labels ("Current Task", "Elapsed") — uniform theme styling hook */
+[data-slot='timer-label'] {
+  font-size: 10px;
+  letter-spacing: var(--ls-nav);
+  text-transform: var(--letter-transform, uppercase);
+  color: rgb(var(--ink-muted));
+  font-weight: 600;
+}
+[data-theme='ror2'] [data-slot='timer-label'],
+[data-theme='terraria'] [data-slot='timer-label'] {
+  color: rgb(var(--accent));
+}
+
+/* ============================================== PANEL HEADER (counts) === */
+[data-slot='panel-header'] {
+  padding: 8px 14px;
+  border-bottom: 1px solid rgb(var(--border));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgb(var(--panel-hi) / 0.6);
+  font-size: 11px;
+  letter-spacing: var(--ls-nav);
+  text-transform: var(--letter-transform, uppercase);
+  color: rgb(var(--ink-muted));
+  font-weight: 600;
+  flex-shrink: 0;
+}
+[data-slot='panel-header'] .title {
+  color: rgb(var(--accent));
+  font-weight: 700;
+}
+[data-slot='panel-header'] .count strong {
+  color: rgb(var(--ink));
+  font-weight: 700;
+}

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Risk of Rain 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a1628;
+  --bg-deep: #050b14;
+  --panel: #0f1f33;
+  --panel-hi: #1a2d46;
+  --panel-edge: #2d4666;
+  --border: #1e3352;
+  --cyan: #5cccff;
+  --cyan-hi: #a0dfff;
+  --cyan-glow: rgba(92, 204, 255, 0.5);
+  --white: #e4edf5;
+  --white-dim: #9aa8bc;
+  --rarity-common: #ffffff;
+  --rarity-uncommon: #80ff80;
+  --rarity-rare: #ff0000;
+  --rarity-legendary: #ffd000;
+  --rarity-boss: #ff00ff;
+  --rarity-void: #9040ff;
+  --teleporter: #ffa000;
+  --hp: #ff3838;
+  --shield: #80d0ff;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: var(--white);
+  overflow: hidden;
+  background: var(--bg);
+  letter-spacing: 0.2px;
+}
+.display { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* dark sky gradient + soft vignette */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(92, 204, 255, 0.15), transparent 70%),
+    radial-gradient(ellipse 60% 60% at 50% 100%, rgba(255, 160, 0, 0.05), transparent 70%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+}
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.4), transparent),
+    radial-gradient(1px 1px at 70% 60%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 40% 80%, rgba(255,255,255,0.3), transparent);
+  background-size: 500px 500px;
+  opacity: 0.5;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top HUD — teleporter + stats layout */
+.top {
+  padding: 16px 24px;
+  background: linear-gradient(180deg, rgba(15, 31, 51, 0.7) 0%, transparent 100%);
+  backdrop-filter: blur(8px);
+  display: grid; grid-template-columns: auto 1fr auto; gap: 28px; align-items: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.logo-group { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.command-orb {
+  width: 46px; height: 46px;
+  background: radial-gradient(circle, var(--cyan-hi) 0%, var(--cyan) 40%, rgba(92, 204, 255, 0.3) 100%);
+  border-radius: 50%;
+  box-shadow: 0 0 20px var(--cyan-glow), inset 0 0 12px rgba(255, 255, 255, 0.4);
+  position: relative;
+  animation: glow 2.5s ease-in-out infinite;
+}
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 20px var(--cyan-glow), inset 0 0 12px rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 0 32px var(--cyan-glow), inset 0 0 16px rgba(255, 255, 255, 0.6); }
+}
+.command-orb::before {
+  content: ""; position: absolute; inset: -4px;
+  border: 1px solid var(--cyan); border-radius: 50%; opacity: 0.5;
+  animation: orbit 4s linear infinite;
+}
+@keyframes orbit { to { transform: rotate(360deg); } }
+.command-orb::after {
+  content: ""; position: absolute; top: 50%; right: -8px; width: 6px; height: 6px;
+  background: var(--cyan); border-radius: 50%;
+  animation: orbit 4s linear infinite; transform-origin: -19px 50%;
+  box-shadow: 0 0 8px var(--cyan);
+}
+
+.brand-name {
+  font-family: 'Bebas Neue'; font-size: 36px; color: var(--white);
+  letter-spacing: 4px; line-height: 0.9;
+  text-shadow: 0 0 12px var(--cyan-glow);
+}
+.brand-sub { font-family: 'Bebas Neue'; font-size: 13px; color: var(--cyan); letter-spacing: 4px; line-height: 1; margin-top: 3px; }
+
+/* teleporter-style timer */
+.teleporter-ring {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 22px; align-items: center;
+  padding: 10px 24px;
+  background: rgba(10, 22, 40, 0.6);
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 24px rgba(92, 204, 255, 0.2), inset 0 0 24px rgba(92, 204, 255, 0.06);
+  position: relative;
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 16px 100%, 0 50%);
+}
+
+.tele-status {
+  display: flex; flex-direction: column; gap: 2px; align-items: center;
+}
+.tele-status .dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--teleporter);
+  box-shadow: 0 0 12px var(--teleporter);
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.5; transform: scale(1.3); } }
+.tele-status .lbl { font-family: 'Bebas Neue'; font-size: 10px; color: var(--teleporter); letter-spacing: 2px; }
+
+.task-area .lbl { font-family: 'Bebas Neue'; font-size: 11px; color: var(--cyan); letter-spacing: 3px; }
+.task-area .name { font-size: 16px; color: var(--white); font-weight: 600; margin-top: 2px; }
+
+.clock-area { text-align: right; }
+.clock-area .lbl { font-family: 'Bebas Neue'; font-size: 11px; color: var(--cyan); letter-spacing: 3px; }
+.clock-area .clock {
+  font-family: 'Bebas Neue'; font-size: 32px; color: var(--white);
+  letter-spacing: 4px; line-height: 0.9;
+  text-shadow: 0 0 14px rgba(92, 204, 255, 0.6);
+}
+
+.ctl { display: flex; gap: 8px; }
+.skill-btn {
+  width: 46px; height: 46px;
+  background: rgba(15, 31, 51, 0.8);
+  border: 1px solid var(--panel-edge);
+  color: var(--cyan); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+  transition: all 0.15s;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+.skill-btn:hover { background: rgba(92, 204, 255, 0.15); border-color: var(--cyan); color: var(--cyan-hi); box-shadow: 0 0 12px var(--cyan-glow); }
+.skill-btn.danger { color: var(--hp); }
+.skill-btn.danger:hover { background: rgba(255, 56, 56, 0.15); border-color: var(--hp); box-shadow: 0 0 12px rgba(255, 56, 56, 0.5); }
+
+/* nav */
+.nav {
+  display: flex; padding: 0 24px; align-items: stretch;
+  background: rgba(5, 11, 20, 0.5); backdrop-filter: blur(4px);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 12px 26px; font-family: 'Bebas Neue'; font-size: 18px;
+  color: var(--white-dim); cursor: pointer; letter-spacing: 3px;
+  position: relative;
+}
+.tab:hover { color: var(--white); }
+.tab.active { color: var(--cyan); }
+.tab.active::after {
+  content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+  background: var(--cyan); box-shadow: 0 0 10px var(--cyan);
+}
+
+.nav-stats { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+.nstat { font-family: 'Bebas Neue'; font-size: 14px; color: var(--white-dim); letter-spacing: 2px; }
+.nstat strong { color: var(--cyan); margin-left: 6px; }
+.nstat.ok strong { color: var(--rarity-uncommon); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 360px; gap: 14px; padding: 14px; min-height: 0; }
+
+.card {
+  background: rgba(15, 31, 51, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  position: relative;
+}
+.card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0.6;
+}
+
+.card-head {
+  padding: 14px 20px 12px;
+  background: linear-gradient(180deg, rgba(92, 204, 255, 0.06), transparent);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-head .title {
+  font-family: 'Bebas Neue'; font-size: 18px; color: var(--white);
+  letter-spacing: 4px; text-shadow: 0 0 10px var(--cyan-glow);
+}
+.card-head .meta {
+  font-family: 'Bebas Neue'; font-size: 13px; color: var(--cyan); letter-spacing: 2px;
+}
+.card-head .meta strong { color: var(--white); }
+
+.card-body { flex: 1; overflow: auto; }
+
+/* tasks as item cards */
+.group { padding: 12px 16px; }
+.group-head {
+  font-family: 'Bebas Neue'; font-size: 14px; color: var(--cyan); letter-spacing: 3px;
+  padding: 6px 4px; display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1px solid var(--border); margin-bottom: 10px;
+}
+.group-head .count { color: var(--white); }
+
+.item {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+  background: rgba(10, 22, 40, 0.6); border: 1px solid var(--border);
+  padding: 12px 14px; margin-bottom: 6px; cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+.item:hover { border-color: var(--panel-edge); background: rgba(26, 45, 70, 0.6); }
+.item.selected {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan), 0 0 20px var(--cyan-glow);
+  background: rgba(92, 204, 255, 0.08);
+}
+.item.running::after {
+  content: ""; position: absolute; top: 0; left: 0; bottom: 0; width: 4px;
+  background: var(--rarity-uncommon); box-shadow: 0 0 8px var(--rarity-uncommon);
+}
+
+.item-frame {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, rgba(92, 204, 255, 0.2), rgba(10, 22, 40, 0.8));
+  border: 2px solid var(--rarity-common);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Bebas Neue'; font-size: 13px; color: var(--rarity-common);
+  position: relative;
+  letter-spacing: 1px;
+}
+.item-frame.rare { border-color: var(--rarity-rare); color: var(--rarity-rare); box-shadow: 0 0 10px rgba(255, 0, 0, 0.4); }
+.item-frame.uncommon { border-color: var(--rarity-uncommon); color: var(--rarity-uncommon); box-shadow: 0 0 10px rgba(128, 255, 128, 0.4); }
+.item-frame.legendary { border-color: var(--rarity-legendary); color: var(--rarity-legendary); box-shadow: 0 0 10px rgba(255, 208, 0, 0.5); }
+.item-frame.boss { border-color: var(--rarity-boss); color: var(--rarity-boss); box-shadow: 0 0 10px rgba(255, 0, 255, 0.4); }
+
+.item .info { min-width: 0; }
+.item .n { font-size: 15px; color: var(--white); font-weight: 600; }
+.item.running .n { color: var(--rarity-uncommon); }
+.item .m { font-size: 11px; color: var(--white-dim); margin-top: 3px; display: flex; gap: 8px; align-items: center; font-family: 'Bebas Neue'; letter-spacing: 2px; text-transform: uppercase; }
+.item .m .chip {
+  padding: 1px 8px; background: rgba(10, 22, 40, 0.8); border: 1px solid var(--panel-edge); color: var(--white);
+}
+.item .m .chip.urg { color: var(--rarity-rare); border-color: var(--rarity-rare); }
+.item .m .chip.hi { color: var(--rarity-legendary); border-color: var(--rarity-legendary); }
+
+.activate {
+  font-family: 'Bebas Neue'; font-size: 13px; letter-spacing: 3px;
+  padding: 8px 18px; cursor: pointer; border: none;
+  background: var(--cyan); color: var(--bg-deep); font-weight: 700;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  transition: filter 0.15s;
+}
+.activate:hover { filter: brightness(1.2); }
+.activate.stop { background: var(--hp); color: var(--white); }
+
+/* detail */
+.detail { padding: 18px 22px; display: flex; flex-direction: column; gap: 16px; }
+
+.tag-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag {
+  font-family: 'Bebas Neue'; font-size: 13px; letter-spacing: 3px;
+  padding: 4px 14px; background: rgba(10, 22, 40, 0.8); border: 1px solid var(--panel-edge); color: var(--white-dim);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+.tag.active { color: var(--bg-deep); background: var(--rarity-uncommon); border-color: var(--rarity-uncommon); }
+.tag.danger { color: var(--white); background: var(--rarity-rare); border-color: var(--rarity-rare); }
+
+.log-panel {
+  background: rgba(10, 22, 40, 0.6); border: 1px solid var(--border);
+}
+.log-panel .lbl {
+  padding: 6px 14px; font-family: 'Bebas Neue'; font-size: 12px; color: var(--cyan); letter-spacing: 3px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(92, 204, 255, 0.06), transparent);
+}
+.log-panel input, .log-panel select, .log-panel textarea {
+  width: 100%; background: transparent; color: var(--white);
+  border: none; padding: 10px 14px; font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
+  font-weight: 500;
+}
+.log-panel textarea { font-family: 'JetBrains Mono', monospace; font-size: 12px; min-height: 120px; line-height: 1.5; resize: vertical; }
+
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+.challenges .hd {
+  font-family: 'Bebas Neue'; font-size: 14px; color: var(--cyan); letter-spacing: 4px;
+  padding: 6px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between;
+}
+.challenges .hd .p { color: var(--rarity-uncommon); font-size: 12px; }
+.c {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center;
+  padding: 10px 14px; background: rgba(10, 22, 40, 0.6); border: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.c .obelisk {
+  width: 18px; height: 18px; border: 2px solid var(--panel-edge);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+.c.done .obelisk { background: var(--rarity-uncommon); border-color: var(--rarity-uncommon); box-shadow: 0 0 8px var(--rarity-uncommon); }
+.c .nn { font-size: 13px; color: var(--white); }
+.c.done .nn { color: var(--white-dim); }
+.c .st { font-family: 'Bebas Neue'; font-size: 11px; letter-spacing: 2px; color: var(--white-dim); }
+.c.done .st { color: var(--rarity-uncommon); }
+
+/* sidebar */
+.sidebar { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.sidebar .card { flex: 1; min-height: 0; }
+
+.day {
+  padding: 10px 16px 6px;
+  font-family: 'Bebas Neue'; font-size: 12px; color: var(--white-dim); letter-spacing: 3px;
+}
+.day.today { color: var(--teleporter); }
+.day.today::before { content: "◆ "; }
+
+.ev {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+  padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+.ev:hover { background: rgba(92, 204, 255, 0.04); }
+.ev .ping { width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.ev .t { font-size: 14px; color: var(--white); font-weight: 500; }
+.ev .w { font-family: 'Bebas Neue'; font-size: 11px; color: var(--white-dim); letter-spacing: 2px; margin-top: 2px; }
+.ev .tm { font-family: 'Bebas Neue'; font-size: 13px; color: var(--cyan); letter-spacing: 2px; }
+
+.em { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.em:hover { background: rgba(92, 204, 255, 0.04); }
+.em.unread { background: rgba(92, 204, 255, 0.06); border-left: 3px solid var(--cyan); padding-left: 13px; }
+.em .from {
+  display: flex; justify-content: space-between;
+  font-family: 'Bebas Neue'; font-size: 12px; color: var(--white-dim); letter-spacing: 2px;
+}
+.em.unread .from .n { color: var(--cyan); }
+.em .subj { font-size: 14px; color: var(--white); margin-top: 4px; font-weight: 500; }
+.em .snip { font-size: 12px; color: var(--white-dim); margin-top: 3px; }
+
+/* footer — "next stage" style strip */
+.footer {
+  padding: 8px 20px; display: flex; gap: 24px;
+  font-family: 'Bebas Neue'; font-size: 12px; color: var(--white-dim); letter-spacing: 3px;
+  border-top: 1px solid var(--border);
+  background: rgba(5, 11, 20, 0.6); backdrop-filter: blur(4px);
+}
+.footer strong { color: var(--cyan); margin-left: 6px; }
+.footer .ok strong { color: var(--rarity-uncommon); }
+.footer .right { margin-left: auto; color: var(--cyan); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP -->
+  <div class="top">
+    <div class="logo-group">
+      <div class="command-orb"></div>
+      <div>
+        <div class="brand-name">HELM</div>
+        <div class="brand-sub">COMMAND ACTIVE</div>
+      </div>
+    </div>
+
+    <div class="teleporter-ring">
+      <div class="tele-status">
+        <div class="dot"></div>
+        <div class="lbl">CHARGING</div>
+      </div>
+      <div class="task-area">
+        <div class="lbl">ACTIVE MISSION</div>
+        <div class="name">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div class="clock-area">
+        <div class="lbl">ELAPSED</div>
+        <div class="clock">02:47:13</div>
+      </div>
+    </div>
+
+    <div class="ctl">
+      <button class="skill-btn" title="Sync">↻</button>
+      <button class="skill-btn danger" title="Halt">✕</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="tab active">TASKS</div>
+    <div class="tab">TIMESHEET</div>
+    <div class="tab">SETTINGS</div>
+    <div class="nav-stats">
+      <div class="nstat">QUEUE <strong>14</strong></div>
+      <div class="nstat">ACTIVE <strong>3</strong></div>
+      <div class="nstat ok">● <strong>ONLINE</strong></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="card">
+      <div class="card-head">
+        <div class="title">ITEM POOL</div>
+        <div class="meta"><strong>14</strong> DISCOVERED</div>
+      </div>
+      <div class="card-body">
+        <div class="group">
+          <div class="group-head"><span>◆ IN COMBAT</span><span class="count">3</span></div>
+          <div class="item selected running">
+            <div class="item-frame legendary">P9</div>
+            <div class="info">
+              <div class="n">Complete Phase 09 discovery pipeline</div>
+              <div class="m">
+                <span class="chip urg">URGENT</span>
+                <span>CCH-AGENT</span>
+                <span>DUE 04/24</span>
+              </div>
+            </div>
+            <button class="activate stop">HALT</button>
+          </div>
+          <div class="item">
+            <div class="item-frame rare">RF</div>
+            <div class="info">
+              <div class="n">Refactor creator filter pre-DB load</div>
+              <div class="m">
+                <span class="chip hi">HIGH</span>
+                <span>INGEST</span>
+              </div>
+            </div>
+            <button class="activate">ACTIVATE</button>
+          </div>
+          <div class="item">
+            <div class="item-frame uncommon">CE</div>
+            <div class="info">
+              <div class="n">Checking Email/ClickUp</div>
+              <div class="m"><span class="chip">NORMAL</span><span>RECURRING</span></div>
+            </div>
+            <button class="activate">ACTIVATE</button>
+          </div>
+
+          <div class="group-head" style="margin-top: 14px;"><span>◆ AVAILABLE</span><span class="count">5</span></div>
+          <div class="item">
+            <div class="item-frame">MS</div>
+            <div class="info">
+              <div class="n">Monday Stand Up - Weekly Planning</div>
+              <div class="m"><span class="chip">NORMAL</span><span>STANDUP</span></div>
+            </div>
+            <button class="activate">ACTIVATE</button>
+          </div>
+          <div class="item">
+            <div class="item-frame rare">SF</div>
+            <div class="info">
+              <div class="n">Review Sina feedback on agent pitch</div>
+              <div class="m"><span class="chip hi">HIGH</span><span>SALES</span></div>
+            </div>
+            <button class="activate">ACTIVATE</button>
+          </div>
+          <div class="item">
+            <div class="item-frame boss">IC</div>
+            <div class="info">
+              <div class="n">Reactivate IC_API_KEY trial</div>
+              <div class="m"><span class="chip urg">URGENT</span><span>BLOCKED</span></div>
+            </div>
+            <button class="activate">ACTIVATE</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="title">LOGBOOK</div>
+        <div class="meta mono">ENTRY <strong>CCH-247</strong></div>
+      </div>
+      <div class="card-body detail">
+        <div class="tag-row">
+          <span class="tag active">◆ IN COMBAT</span>
+          <span class="tag danger">URGENT</span>
+          <span class="tag">CCH-AGENT</span>
+          <span class="tag">04/24</span>
+        </div>
+        <div class="log-panel">
+          <div class="lbl">TITLE</div>
+          <input value="Complete Phase 09 discovery pipeline" />
+        </div>
+        <div class="row-3">
+          <div class="log-panel"><div class="lbl">STATUS</div><input value="in progress" /></div>
+          <div class="log-panel"><div class="lbl">PRIORITY</div>
+            <select><option>URGENT</option><option>HIGH</option><option>NORMAL</option></select>
+          </div>
+          <div class="log-panel"><div class="lbl">DUE</div><input type="date" value="2026-04-24" /></div>
+        </div>
+        <div class="log-panel">
+          <div class="lbl">FIELD NOTES</div>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load
+- Add spot-check template for first approved cohort
+- Audit: no IC_API calls until trial reactivation</textarea>
+        </div>
+        <div class="challenges">
+          <div class="hd"><span>◆ CHALLENGES</span><span class="p">2 / 3 COMPLETE</span></div>
+          <div class="c done"><div class="obelisk"></div><div class="nn">09-01 data_completeness format</div><div class="st">COMPLETE</div></div>
+          <div class="c done"><div class="obelisk"></div><div class="nn">09-02 import cleanup</div><div class="st">COMPLETE</div></div>
+          <div class="c"><div class="obelisk"></div><div class="nn">09-03 spot-check template</div><div class="st">PENDING</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-head">
+          <div class="title">TIMELINE</div>
+          <div class="meta">7D</div>
+        </div>
+        <div class="card-body">
+          <div class="day today">TODAY · THU APR 23</div>
+          <div class="ev"><div class="ping" style="background: var(--teleporter); box-shadow: 0 0 8px var(--teleporter);"></div><div><div class="t">Standup: Daily</div><div class="w">VITABAE</div></div><div class="tm">09:30</div></div>
+          <div class="ev"><div class="ping" style="background: var(--rarity-uncommon); box-shadow: 0 0 8px var(--rarity-uncommon);"></div><div><div class="t">1:1 with Isaac</div><div class="w">WORK</div></div><div class="tm">11:00</div></div>
+          <div class="day">FRI APR 24</div>
+          <div class="ev"><div class="ping" style="background: var(--rarity-rare); box-shadow: 0 0 8px var(--rarity-rare);"></div><div><div class="t">Phase 09 review</div><div class="w">VITABAE</div></div><div class="tm">14:00</div></div>
+          <div class="ev"><div class="ping" style="background: var(--rarity-legendary); box-shadow: 0 0 8px var(--rarity-legendary);"></div><div><div class="t">EOW report</div><div class="w">WORK</div></div><div class="tm">16:30</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="title">TRANSMISSIONS</div>
+          <div class="meta"><strong>3</strong> NEW</div>
+        </div>
+        <div class="card-body">
+          <div class="em unread">
+            <div class="from"><span class="n">SINA NEKOUEI</span><span>10:12</span></div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on institutional-memory angle. I want to see…</div>
+          </div>
+          <div class="em unread">
+            <div class="from"><span class="n">CLICKUP</span><span>09:44</span></div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned "Draft Q3 tracking" to you…</div>
+          </div>
+          <div class="em">
+            <div class="from"><span class="n">MODASH BILLING</span><span>YESTERDAY</span></div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access after Apr 26…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="ok">NET <strong>ONLINE</strong></span>
+    <span class="ok">CLICKUP <strong>READY</strong></span>
+    <span class="ok">GOOGLE <strong>READY</strong></span>
+    <span>DIFFICULTY <strong>MONSOON</strong></span>
+    <span class="right">UPTIME <strong>04:12:19</strong></span>
+  </div>
+</div>
+</body>
+</html>

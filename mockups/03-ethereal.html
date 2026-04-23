@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Ethereal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-0: #05070d;
+  --bg-1: #0a0f1c;
+  --panel: rgba(255, 255, 255, 0.035);
+  --panel-hi: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hi: rgba(122, 162, 255, 0.35);
+  --ink: #e8ebf2;
+  --ink-muted: #7b8499;
+  --blue: #7aa2ff;
+  --blue-glow: rgba(122, 162, 255, 0.4);
+  --aqua: #5fe3d1;
+  --lilac: #c4a7ff;
+  --peach: #ffa672;
+  --green: #5fe37a;
+  --red: #ff7a91;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13.5px;
+  color: var(--ink);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(122,162,255,0.12), transparent 60%),
+    radial-gradient(ellipse 60% 60% at 90% 100%, rgba(196,167,255,0.10), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(95,227,209,0.06), transparent 70%),
+    linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  letter-spacing: 0.2px;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* starfield */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.5) 50%, transparent 100%),
+    radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.3) 50%, transparent 100%),
+    radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.4) 50%, transparent 100%),
+    radial-gradient(1px 1px at 35% 85%, rgba(255,255,255,0.35) 50%, transparent 100%),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.25) 50%, transparent 100%),
+    radial-gradient(1px 1px at 10% 65%, rgba(255,255,255,0.3) 50%, transparent 100%);
+  background-size: 600px 600px;
+  opacity: 0.5;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top */
+.top {
+  display: flex; align-items: center; gap: 20px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 15, 28, 0.5);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.brand {
+  font-weight: 600; font-size: 16px; color: var(--blue);
+  text-shadow: 0 0 20px var(--blue-glow);
+}
+.brand-dot {
+  display: inline-block; width: 8px; height: 8px;
+  background: var(--blue); border-radius: 50%;
+  box-shadow: 0 0 14px var(--blue);
+  margin-right: 10px; vertical-align: middle;
+}
+.timer-pill {
+  margin: 0 auto; display: flex; align-items: center; gap: 16px;
+  padding: 8px 20px 8px 12px;
+  background: rgba(122, 162, 255, 0.08);
+  border: 1px solid var(--border-hi);
+  border-radius: 100px;
+  box-shadow: 0 0 24px rgba(122,162,255,0.12), inset 0 0 20px rgba(122,162,255,0.05);
+}
+.timer-pill .pulse {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 16px var(--green);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+.timer-pill .task {
+  font-weight: 500; color: var(--ink); max-width: 360px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.timer-pill .clock {
+  font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500;
+  color: var(--blue); letter-spacing: 2px;
+}
+.icon-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--ink-muted); width: 36px; height: 36px; border-radius: 50%;
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--border-hi); background: var(--panel-hi); }
+.pill-btn {
+  background: transparent; color: var(--red); border: 1px solid rgba(255,122,145,0.4);
+  border-radius: 100px; padding: 6px 16px; font-family: inherit; font-size: 12px;
+  font-weight: 500; cursor: pointer; letter-spacing: 1px;
+}
+.pill-btn:hover { background: rgba(255,122,145,0.1); }
+
+/* nav */
+.nav {
+  display: flex; padding: 10px 24px; gap: 4px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(10, 15, 28, 0.3);
+  backdrop-filter: blur(12px);
+}
+.tab {
+  padding: 7px 16px; font-size: 13px; color: var(--ink-muted);
+  cursor: pointer; border-radius: 8px; font-weight: 500;
+  transition: all 0.15s;
+}
+.tab.active { color: var(--ink); background: var(--panel-hi); }
+.tab:hover:not(.active) { color: var(--ink); }
+.nav-right { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 11px; color: var(--ink-muted); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 340px; gap: 14px; padding: 14px; min-height: 0; }
+
+.card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow: hidden; display: flex; flex-direction: column; min-height: 0;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.card-head {
+  padding: 12px 18px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.card-head .title {
+  font-size: 11px; letter-spacing: 2.5px; color: var(--ink-muted);
+  font-weight: 600; text-transform: uppercase;
+}
+.card-head .meta { font-size: 11px; color: var(--ink-muted); }
+.card-head .meta strong { color: var(--ink); font-weight: 500; }
+
+.card-body { flex: 1; overflow: auto; }
+
+/* tasks */
+.group { padding: 10px 14px 16px; }
+.group-label {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; letter-spacing: 2px; color: var(--ink-muted);
+  text-transform: uppercase; margin: 10px 4px 8px;
+  font-weight: 500;
+}
+.group-label .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.group-label.ip .dot { background: var(--green); }
+.group-label.op .dot { background: var(--peach); }
+.group-label .count { margin-left: auto; color: var(--ink-muted); }
+
+.task {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; margin-bottom: 4px; border-radius: 10px;
+  cursor: pointer; transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.task:hover { background: var(--panel-hi); }
+.task.selected {
+  background: rgba(122, 162, 255, 0.08);
+  border-color: var(--border-hi);
+  box-shadow: 0 0 0 1px rgba(122,162,255,0.12), 0 0 20px rgba(122,162,255,0.06);
+}
+.task .bullet {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--ink-muted);
+  flex-shrink: 0; box-shadow: 0 0 8px currentColor;
+}
+.task.running .bullet { background: var(--green); }
+.task .info { flex: 1; min-width: 0; }
+.task .n { color: var(--ink); font-weight: 500; font-size: 14px; }
+.task .m { font-size: 11px; color: var(--ink-muted); margin-top: 3px; display: flex; gap: 10px; align-items: center; }
+.badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 100px;
+  background: var(--panel-hi); color: var(--ink-muted);
+}
+.badge.urgent { color: var(--red); background: rgba(255,122,145,0.1); }
+.badge.high { color: var(--peach); background: rgba(255,166,114,0.1); }
+.ghost-btn {
+  background: transparent; border: 1px solid var(--border-hi);
+  color: var(--blue); font-family: inherit; font-size: 11px;
+  padding: 4px 12px; border-radius: 100px; cursor: pointer; font-weight: 500;
+  opacity: 0; transition: opacity 0.15s;
+}
+.task:hover .ghost-btn { opacity: 1; }
+.task.running .ghost-btn { opacity: 1; color: var(--red); border-color: rgba(255,122,145,0.4); }
+
+/* detail */
+.detail { padding: 20px 22px; display: flex; flex-direction: column; gap: 18px; }
+.title-field { font-size: 22px; font-weight: 600; color: var(--ink); background: transparent; border: none; padding: 0; outline: none; letter-spacing: -0.3px; }
+.title-field:focus { box-shadow: 0 1px 0 var(--border-hi); padding-bottom: 4px; }
+.meta-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  font-size: 11px; padding: 4px 11px; border-radius: 100px;
+  background: var(--panel-hi); color: var(--ink); display: inline-flex; gap: 6px; align-items: center;
+  font-weight: 500;
+}
+.chip.status { color: var(--green); background: rgba(95,227,122,0.1); }
+.chip.prio { color: var(--red); background: rgba(255,122,145,0.1); }
+.chip.due { color: var(--ink-muted); }
+
+.desc-card {
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 16px;
+}
+.desc-card label { display: block; font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); margin-bottom: 8px; text-transform: uppercase; }
+.desc-card textarea {
+  width: 100%; background: transparent; border: none; color: var(--ink);
+  font-family: 'JetBrains Mono', monospace; font-size: 12.5px; resize: vertical;
+  min-height: 130px; outline: none; line-height: 1.6;
+}
+
+.subtasks .st {
+  display: flex; gap: 10px; align-items: center;
+  padding: 8px 12px; border-radius: 8px;
+  background: rgba(255,255,255,0.02); margin-bottom: 3px; font-size: 13px;
+}
+.subtasks .st .c { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border-hi); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: var(--green); }
+.subtasks .st.done .c { background: rgba(95,227,122,0.15); border-color: transparent; }
+.subtasks .st.done .n { color: var(--ink-muted); text-decoration: line-through; }
+
+.section-label {
+  font-size: 10px; letter-spacing: 2.5px; color: var(--ink-muted);
+  font-weight: 600; text-transform: uppercase; margin-bottom: 8px;
+}
+
+/* sidebar */
+.sidebar { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.sidebar .card { flex: 1; min-height: 0; }
+
+.day { padding: 10px 14px 6px; font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); font-weight: 600; text-transform: uppercase; }
+.day.today { color: var(--blue); }
+
+.ev {
+  display: flex; gap: 10px; padding: 10px 14px;
+  cursor: pointer; border-radius: 8px; margin: 0 6px 3px;
+}
+.ev:hover { background: var(--panel-hi); }
+.ev .bar { width: 3px; border-radius: 2px; background: var(--blue); }
+.ev .t { font-weight: 500; color: var(--ink); font-size: 13px; }
+.ev .w { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+
+.em {
+  padding: 12px 16px; cursor: pointer; border-radius: 8px; margin: 0 6px 3px;
+  transition: background 0.15s;
+}
+.em:hover { background: var(--panel-hi); }
+.em .from { font-size: 12px; color: var(--ink-muted); display: flex; justify-content: space-between; }
+.em.unread .from { color: var(--ink); font-weight: 600; }
+.em .subj { font-size: 13px; color: var(--ink); margin-top: 3px; }
+.em.unread .subj { font-weight: 500; }
+.em .snip { font-size: 11.5px; color: var(--ink-muted); margin-top: 3px; }
+.em.unread::before {
+  content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--blue); margin-right: 8px; vertical-align: middle;
+  box-shadow: 0 0 8px var(--blue);
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP -->
+  <div class="top">
+    <div class="brand"><span class="brand-dot"></span>Helm</div>
+    <div class="timer-pill">
+      <div class="pulse"></div>
+      <div>
+        <div style="font-size:10px; letter-spacing:2px; color: var(--ink-muted); text-transform:uppercase;">Current task</div>
+        <div class="task">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div>
+        <div style="font-size:10px; letter-spacing:2px; color: var(--ink-muted); text-align:right; text-transform:uppercase;">Elapsed</div>
+        <div class="clock">02:47:13</div>
+      </div>
+    </div>
+    <button class="icon-btn" title="Theme">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <button class="pill-btn">Stop</button>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <div class="tab active">Tasks</div>
+    <div class="tab">Timesheet</div>
+    <div class="tab">Settings</div>
+    <div class="nav-right">
+      <span>14 active</span><span>•</span><span>Synced 14s ago</span>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- tasks -->
+    <div class="card">
+      <div class="card-head">
+        <div class="title">Task Registry</div>
+        <div class="meta"><strong>14</strong> assigned</div>
+      </div>
+      <div class="card-body">
+        <div class="group">
+          <div class="group-label ip"><span class="dot"></span>In progress<span class="count">3</span></div>
+          <div class="task selected running">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Complete Phase 09 discovery pipeline</div>
+              <div class="m"><span class="badge urgent">Urgent</span><span>CCH-Agent</span><span>Due Apr 24</span></div>
+            </div>
+            <button class="ghost-btn">Stop</button>
+          </div>
+          <div class="task">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Refactor creator filter pre-DB load</div>
+              <div class="m"><span class="badge high">High</span><span>Ingest</span><span>Due Apr 26</span></div>
+            </div>
+            <button class="ghost-btn">Start</button>
+          </div>
+          <div class="task">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Checking Email/ClickUp</div>
+              <div class="m"><span class="badge">Normal</span><span>Recurring</span></div>
+            </div>
+            <button class="ghost-btn">Start</button>
+          </div>
+
+          <div class="group-label op"><span class="dot"></span>Open<span class="count">5</span></div>
+          <div class="task">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Monday Stand Up - Weekly Planning</div>
+              <div class="m"><span class="badge">Normal</span><span>Standup</span></div>
+            </div>
+            <button class="ghost-btn">Start</button>
+          </div>
+          <div class="task">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Review Sina feedback on agent pitch</div>
+              <div class="m"><span class="badge high">High</span><span>Sales</span></div>
+            </div>
+            <button class="ghost-btn">Start</button>
+          </div>
+          <div class="task">
+            <span class="bullet"></span>
+            <div class="info">
+              <div class="n">Reactivate IC_API_KEY trial</div>
+              <div class="m"><span class="badge urgent">Urgent</span><span>Blocked</span></div>
+            </div>
+            <button class="ghost-btn">Start</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- detail -->
+    <div class="card">
+      <div class="card-head">
+        <div class="title">Task Detail</div>
+        <div class="meta mono">CCH-AGENT-247</div>
+      </div>
+      <div class="card-body detail">
+        <input class="title-field" value="Complete Phase 09 discovery pipeline" />
+        <div class="meta-chips">
+          <span class="chip status">● In progress</span>
+          <span class="chip prio">Urgent</span>
+          <span class="chip due">Due Apr 24</span>
+          <span class="chip">CCH-Agent</span>
+        </div>
+        <div class="desc-card">
+          <label>Description</label>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load (keep in JSON only)
+- Add spot-check template for first approved cohort
+- Audit: no IC_API calls until trial reactivation</textarea>
+        </div>
+        <div class="subtasks">
+          <div class="section-label">Subtasks · 3</div>
+          <div class="st done"><div class="c">✓</div><div class="n">09-01 data_completeness format</div></div>
+          <div class="st done"><div class="c">✓</div><div class="n">09-02 import cleanup</div></div>
+          <div class="st"><div class="c"></div><div class="n">09-03 spot-check template</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sidebar -->
+    <div class="sidebar">
+      <div class="card">
+        <div class="card-head">
+          <div class="title">Calendar</div>
+          <div class="meta">Next 7 days</div>
+        </div>
+        <div class="card-body">
+          <div class="day today">● Today · Thu Apr 23</div>
+          <div class="ev"><div class="bar" style="background: var(--peach);"></div><div><div class="t">Standup: Daily</div><div class="w">9:30 AM · Vitabae</div></div></div>
+          <div class="ev"><div class="bar" style="background: var(--aqua);"></div><div><div class="t">1:1 with Isaac</div><div class="w">11:00 AM · Work</div></div></div>
+          <div class="day">Fri Apr 24</div>
+          <div class="ev"><div class="bar" style="background: var(--red);"></div><div><div class="t">Phase 09 review</div><div class="w">2:00 PM · Vitabae</div></div></div>
+          <div class="ev"><div class="bar" style="background: var(--lilac);"></div><div><div class="t">End-of-week report</div><div class="w">4:30 PM · Work</div></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <div class="title">Inbox</div>
+          <div class="meta"><strong>3</strong> unread</div>
+        </div>
+        <div class="card-body">
+          <div class="em unread">
+            <div class="from"><span>Sina Nekouei</span><span>10:12</span></div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on the institutional-memory angle. I want to see…</div>
+          </div>
+          <div class="em unread">
+            <div class="from"><span>ClickUp</span><span>09:44</span></div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned "Draft Q3 tracking" to you…</div>
+          </div>
+          <div class="em">
+            <div class="from"><span>Modash Billing</span><span>Yesterday</span></div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access after Apr 26…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

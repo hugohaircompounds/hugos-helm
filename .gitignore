@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-electron
+release
+.env
+.env.local
+*.log
+.DS_Store
+helm.sqlite
+helm.sqlite-journal
+.claude/
+Thumbs.db

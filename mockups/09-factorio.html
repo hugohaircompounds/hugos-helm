@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Factorio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1a1a1a;
+  --panel: #2a2a2a;
+  --panel-hi: #3a3a3a;
+  --panel-deep: #141414;
+  --border: #0f0f0f;
+  --border-hi: #5a5a5a;
+  --rivet: #6a6a6a;
+  --orange: #ff9d3f;
+  --orange-dim: #a06525;
+  --yellow: #f0d04e;
+  --red: #e43c3c;
+  --green: #6ec848;
+  --blue: #5ca9d8;
+  --copper: #c06a30;
+  --iron: #b6c8d1;
+  --steel: #d4d4d4;
+  --ink: #e8e0c8;
+  --ink-muted: #8a8170;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+/* industrial grid + rivets */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+    radial-gradient(circle at 0 0, var(--rivet) 1.5px, transparent 2px);
+  background-size: 32px 32px, 32px 32px, 32px 32px;
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top control panel — machine-casing look */
+.top {
+  background: linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 60%, var(--panel-deep) 100%);
+  border-bottom: 3px solid var(--border);
+  padding: 10px 18px;
+  display: grid; grid-template-columns: auto 1fr auto; gap: 20px; align-items: center;
+  position: relative;
+  box-shadow: inset 0 1px 0 var(--border-hi);
+}
+.top::before {
+  content: ""; position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
+  background:
+    radial-gradient(circle at 6px 6px, var(--rivet) 2px, transparent 2.5px) top left / 24px 24px,
+    radial-gradient(circle at 6px 6px, var(--rivet) 2px, transparent 2.5px) top right / 24px 24px;
+  background-repeat: no-repeat;
+}
+
+.brand {
+  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center;
+}
+.brand-gear {
+  width: 42px; height: 42px;
+  background: radial-gradient(circle, var(--orange) 0%, var(--orange-dim) 70%);
+  clip-path: polygon(50% 0%, 58% 10%, 70% 6%, 74% 18%, 88% 22%, 86% 36%, 98% 44%, 92% 56%, 98% 68%, 86% 74%, 78% 86%, 64% 84%, 56% 96%, 44% 96%, 36% 84%, 22% 86%, 14% 74%, 2% 68%, 8% 56%, 2% 44%, 14% 36%, 12% 22%, 26% 18%, 30% 6%, 42% 10%);
+  animation: spin 10s linear infinite;
+  box-shadow: 0 0 12px rgba(255, 157, 63, 0.4);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.brand-name {
+  font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 22px;
+  color: var(--orange); letter-spacing: 3px; line-height: 1;
+}
+.brand-sub { font-size: 10px; color: var(--ink-muted); letter-spacing: 2px; margin-top: 2px; }
+
+.machine-readout {
+  background: #0a0a0a;
+  border: 2px solid var(--border);
+  padding: 10px 16px;
+  display: grid; grid-template-columns: auto auto 1fr auto auto; gap: 16px; align-items: center;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.8), inset 0 0 0 1px rgba(255,255,255,0.04);
+  position: relative;
+}
+.machine-readout::before {
+  content: "PROD"; position: absolute; top: -8px; left: 12px;
+  padding: 0 8px; background: var(--panel); font-size: 9px; color: var(--orange-dim);
+  letter-spacing: 3px;
+}
+
+.led-col { display: flex; flex-direction: column; gap: 3px; }
+.led { width: 8px; height: 8px; background: var(--green); border-radius: 1px; box-shadow: 0 0 5px var(--green); }
+.led.off { background: var(--border); box-shadow: none; }
+.led.yellow { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); }
+.led.red { background: var(--red); box-shadow: 0 0 5px var(--red); animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+.task-line { display: flex; flex-direction: column; }
+.task-line .lbl { font-size: 9px; letter-spacing: 3px; color: var(--orange); font-weight: 700; }
+.task-line .name { font-size: 14px; color: var(--ink); margin-top: 2px; font-weight: 500; }
+
+.clock-line { text-align: right; }
+.clock-line .lbl { font-size: 9px; letter-spacing: 3px; color: var(--orange); font-weight: 700; }
+.clock-line .clock {
+  font-family: 'Share Tech Mono', monospace; font-size: 22px; color: var(--green);
+  text-shadow: 0 0 10px rgba(110, 200, 72, 0.6); letter-spacing: 3px; line-height: 1; margin-top: 2px;
+}
+
+.rate-arrow {
+  font-size: 14px; color: var(--green); font-weight: 700;
+  padding: 0 6px;
+}
+
+.btn {
+  background: linear-gradient(180deg, var(--panel-hi) 0%, var(--panel) 100%);
+  border: 2px solid var(--border-hi);
+  color: var(--ink); font-family: inherit; font-weight: 600; font-size: 11px;
+  padding: 8px 16px; cursor: pointer; letter-spacing: 2px;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.btn:hover { background: var(--panel-hi); color: var(--orange); border-color: var(--orange); }
+.btn.kill { color: var(--red); border-color: var(--red); }
+.btn.kill:hover { background: rgba(228, 60, 60, 0.1); color: var(--red); }
+
+/* nav */
+.nav {
+  background: var(--panel);
+  border-bottom: 2px solid var(--border);
+  padding: 0 4px;
+  display: flex;
+  box-shadow: inset 0 -1px 0 var(--border-hi);
+}
+.tab {
+  padding: 10px 22px; font-weight: 600; font-size: 11px; letter-spacing: 3px;
+  color: var(--ink-muted); cursor: pointer; text-transform: uppercase;
+  border-right: 1px solid var(--border);
+  position: relative;
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+}
+.tab.active { color: var(--orange); background: var(--bg); }
+.tab.active::after {
+  content: ""; position: absolute; bottom: -2px; left: 0; right: 0; height: 2px;
+  background: var(--orange); box-shadow: 0 0 8px var(--orange);
+}
+
+.nav-stats { margin-left: auto; display: flex; align-items: stretch; }
+.nstat {
+  padding: 10px 14px; font-size: 10px; letter-spacing: 2px; color: var(--ink-muted);
+  border-left: 1px solid var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.nstat strong { color: var(--ink); font-weight: 700; }
+.nstat.ok strong { color: var(--green); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 340px; gap: 3px; background: var(--border); min-height: 0; }
+
+.module {
+  background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  border: 1px solid var(--border-hi);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.module-head {
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+  padding: 8px 14px;
+  border-bottom: 2px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 11px; letter-spacing: 3px; font-weight: 700; color: var(--orange);
+  text-transform: uppercase;
+}
+.module-head::before { content: "▶ "; color: var(--yellow); }
+.module-head .prod {
+  font-family: 'Share Tech Mono', monospace; font-size: 10px; color: var(--green);
+  letter-spacing: 1px; background: #0a0a0a; padding: 2px 8px; border: 1px solid var(--border);
+}
+
+.module-body { flex: 1; overflow: auto; }
+
+/* tasks — production line rows */
+.prod-group { padding: 8px 10px; }
+.prod-label {
+  display: flex; justify-content: space-between; font-size: 10px; letter-spacing: 2px;
+  color: var(--ink-muted); padding: 6px 4px; text-transform: uppercase;
+  border-bottom: 1px dashed var(--border-hi); margin-bottom: 6px;
+}
+.prod-label strong { color: var(--yellow); font-weight: 700; }
+
+.task {
+  display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center;
+  background: var(--panel-deep); border: 1px solid var(--border);
+  padding: 8px 10px; margin-bottom: 4px; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.task:hover { background: var(--panel); border-color: var(--border-hi); }
+.task.selected { border-color: var(--orange); box-shadow: inset 0 0 0 1px rgba(255, 157, 63, 0.3); }
+.task.running { border-color: var(--green); }
+
+.recipe-icon {
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel-deep));
+  border: 1px solid var(--border-hi);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--orange);
+  position: relative;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.recipe-icon.copper { color: var(--copper); }
+.recipe-icon.iron { color: var(--iron); }
+.recipe-icon.steel { color: var(--steel); }
+.recipe-icon.red { color: var(--red); }
+
+.task .n { font-size: 14px; color: var(--ink); font-weight: 500; }
+.task.running .n { color: var(--green); }
+.task .m { font-size: 10px; color: var(--ink-muted); margin-top: 3px; display: flex; gap: 8px; letter-spacing: 1px; text-transform: uppercase; }
+.task .m .pill {
+  padding: 1px 6px; background: var(--panel); border: 1px solid var(--border-hi);
+  font-family: 'Share Tech Mono', monospace;
+}
+.task .m .pill.urg { color: var(--red); border-color: var(--red); }
+.task .m .pill.hi { color: var(--yellow); border-color: var(--yellow); }
+
+.throughput {
+  font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--green);
+  text-align: right; letter-spacing: 1px;
+}
+.throughput .rate { color: var(--ink-muted); }
+
+.btn-start {
+  background: linear-gradient(180deg, var(--green), #4a8a30);
+  border: 1px solid #2a5018; color: var(--panel-deep);
+  padding: 5px 12px; font-family: inherit; font-weight: 700; font-size: 10px;
+  letter-spacing: 2px; cursor: pointer; text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.btn-start.stop { background: linear-gradient(180deg, var(--red), #8a2020); border-color: #5a0808; color: var(--ink); }
+
+/* detail */
+.detail { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.spec-strip { display: flex; gap: 6px; flex-wrap: wrap; }
+.spec {
+  padding: 4px 10px; font-size: 10px; letter-spacing: 2px;
+  background: var(--panel-deep); border: 1px solid var(--border-hi); color: var(--ink-muted);
+  text-transform: uppercase; font-weight: 600;
+}
+.spec.on { color: var(--green); border-color: var(--green); }
+.spec.urg { color: var(--red); border-color: var(--red); }
+
+.terminal {
+  background: #0a0a0a; border: 1px solid var(--border-hi);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.6);
+}
+.terminal .lbl {
+  padding: 5px 12px; font-size: 10px; letter-spacing: 3px;
+  color: var(--orange); border-bottom: 1px solid var(--border-hi);
+  font-weight: 700; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(255,157,63,0.1), transparent);
+}
+.terminal input, .terminal select, .terminal textarea {
+  width: 100%; background: transparent; color: var(--ink); border: none;
+  padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; outline: none;
+}
+.terminal input:focus, .terminal textarea:focus { box-shadow: inset 0 -2px 0 var(--orange); }
+.terminal textarea { min-height: 120px; font-family: 'Share Tech Mono', monospace; font-size: 12px; line-height: 1.4; resize: vertical; }
+
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+
+.recipe-steps .rsh {
+  font-size: 11px; letter-spacing: 3px; color: var(--orange);
+  padding: 6px 0; margin-bottom: 6px; font-weight: 700; text-transform: uppercase;
+  border-bottom: 1px solid var(--border-hi);
+}
+.rs {
+  display: grid; grid-template-columns: auto auto 1fr auto; gap: 10px; align-items: center;
+  padding: 6px 10px; background: var(--panel-deep); border: 1px solid var(--border);
+  margin-bottom: 3px; font-size: 12px;
+}
+.rs .step { color: var(--ink-muted); font-family: 'Share Tech Mono', monospace; }
+.rs .arrow { color: var(--orange); }
+.rs.done .step { color: var(--green); }
+.rs.done .arrow { color: var(--green); }
+.rs .out { font-size: 10px; color: var(--green); font-family: 'Share Tech Mono', monospace; }
+.rs:not(.done) .out { color: var(--yellow); }
+
+/* sidebar */
+.sidebar { display: flex; flex-direction: column; gap: 3px; background: var(--border); min-height: 0; }
+.sidebar .module { flex: 1; min-height: 0; }
+
+.day {
+  padding: 8px 12px; font-size: 10px; letter-spacing: 2px; color: var(--orange-dim); text-transform: uppercase;
+  background: rgba(0,0,0,0.3);
+  font-weight: 600;
+}
+.day.today { color: var(--orange); }
+
+.ev {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 10px;
+  padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.ev:hover { background: var(--panel-hi); }
+.ev .dot { width: 10px; height: 10px; background: var(--green); border-radius: 1px; box-shadow: 0 0 6px var(--green); }
+.ev .t { font-size: 13px; color: var(--ink); }
+.ev .w { font-size: 10px; color: var(--ink-muted); letter-spacing: 1px; text-transform: uppercase; }
+.ev .tm { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--orange); }
+
+.em { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.em:hover { background: var(--panel-hi); }
+.em.unread { background: rgba(255, 157, 63, 0.06); border-left: 3px solid var(--orange); padding-left: 9px; }
+.em .from { display: flex; justify-content: space-between; font-size: 10px; color: var(--ink-muted); letter-spacing: 1px; text-transform: uppercase; }
+.em.unread .from .name { color: var(--orange); font-weight: 700; }
+.em .subj { font-size: 13px; color: var(--ink); margin-top: 3px; font-weight: 500; }
+.em .snip { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+
+/* footer telemetry bar */
+.footer {
+  background: var(--panel-deep); border-top: 2px solid var(--border);
+  display: flex; padding: 0;
+  box-shadow: inset 0 1px 0 var(--border-hi);
+}
+.tel { padding: 6px 14px; border-right: 1px solid var(--border); font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
+.tel strong { color: var(--green); font-family: 'Share Tech Mono', monospace; }
+.tel .led { width: 6px; height: 6px; background: var(--green); box-shadow: 0 0 4px var(--green); border-radius: 1px; }
+.right { margin-left: auto; border-right: 0; color: var(--orange); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div class="brand">
+      <div class="brand-gear"></div>
+      <div>
+        <div class="brand-name">HELM</div>
+        <div class="brand-sub">FACTORY INTERFACE v0.1</div>
+      </div>
+    </div>
+
+    <div class="machine-readout">
+      <div class="led-col">
+        <div class="led"></div>
+        <div class="led yellow"></div>
+        <div class="led"></div>
+      </div>
+      <div class="task-line">
+        <div class="lbl">⚙ ACTIVE RECIPE</div>
+        <div class="name">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div class="rate-arrow">▸▸▸</div>
+      <div class="clock-line">
+        <div class="lbl">⏲ T+</div>
+        <div class="clock">02:47:13</div>
+      </div>
+      <div class="led-col">
+        <div class="led"></div>
+        <div class="led"></div>
+        <div class="led"></div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 6px;">
+      <button class="btn">⟳ SYNC</button>
+      <button class="btn kill">▪ HALT</button>
+    </div>
+  </div>
+
+  <div class="nav">
+    <div class="tab active">TASKS</div>
+    <div class="tab">TIMESHEET</div>
+    <div class="tab">SETTINGS</div>
+    <div class="nav-stats">
+      <div class="nstat">Q-SIZE <strong>14</strong></div>
+      <div class="nstat">ACTIVE <strong>3</strong></div>
+      <div class="nstat ok"><span style="width:6px;height:6px;background:var(--green);box-shadow:0 0 4px var(--green);border-radius:1px;"></span> <strong>OPERATIONAL</strong></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="module">
+      <div class="module-head"><span>TASK QUEUE</span><span class="prod">14 items</span></div>
+      <div class="module-body">
+        <div class="prod-group">
+          <div class="prod-label"><span>▸ CRAFTING</span><strong>3 / ∞</strong></div>
+          <div class="task selected running">
+            <div class="recipe-icon red">P9</div>
+            <div>
+              <div class="n">Complete Phase 09 discovery pipeline</div>
+              <div class="m"><span class="pill urg">URGENT</span><span class="pill">CCH-AGENT</span></div>
+            </div>
+            <div class="throughput">2h 47m<br><span class="rate">→ ACTIVE</span></div>
+            <button class="btn-start stop">HALT</button>
+          </div>
+          <div class="task">
+            <div class="recipe-icon copper">RF</div>
+            <div>
+              <div class="n">Refactor creator filter pre-DB load</div>
+              <div class="m"><span class="pill hi">HIGH</span><span class="pill">INGEST</span></div>
+            </div>
+            <div class="throughput">0h 00m<br><span class="rate">→ IDLE</span></div>
+            <button class="btn-start">START</button>
+          </div>
+          <div class="task">
+            <div class="recipe-icon iron">CE</div>
+            <div>
+              <div class="n">Checking Email/ClickUp</div>
+              <div class="m"><span class="pill">NORMAL</span></div>
+            </div>
+            <div class="throughput">0h 00m<br><span class="rate">→ IDLE</span></div>
+            <button class="btn-start">START</button>
+          </div>
+
+          <div class="prod-label" style="margin-top: 10px;"><span>▸ QUEUE</span><strong>5 / ∞</strong></div>
+          <div class="task">
+            <div class="recipe-icon steel">MS</div>
+            <div>
+              <div class="n">Monday Stand Up - Weekly Planning</div>
+              <div class="m"><span class="pill">STANDUP</span></div>
+            </div>
+            <div class="throughput">0h 00m<br><span class="rate">→ READY</span></div>
+            <button class="btn-start">START</button>
+          </div>
+          <div class="task">
+            <div class="recipe-icon copper">SF</div>
+            <div>
+              <div class="n">Review Sina feedback on agent pitch</div>
+              <div class="m"><span class="pill hi">HIGH</span><span class="pill">SALES</span></div>
+            </div>
+            <div class="throughput">0h 00m<br><span class="rate">→ READY</span></div>
+            <button class="btn-start">START</button>
+          </div>
+          <div class="task">
+            <div class="recipe-icon red">IC</div>
+            <div>
+              <div class="n">Reactivate IC_API_KEY trial</div>
+              <div class="m"><span class="pill urg">URGENT</span><span class="pill">BLOCKED</span></div>
+            </div>
+            <div class="throughput">0h 00m<br><span class="rate" style="color: var(--red);">→ BLOCKED</span></div>
+            <button class="btn-start">START</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><span>RECIPE INSPECTOR</span><span class="prod">ID_247</span></div>
+      <div class="module-body detail">
+        <div class="spec-strip">
+          <span class="spec on">● CRAFTING</span>
+          <span class="spec urg">PRIORITY: URGENT</span>
+          <span class="spec">LIST: CCH-AGENT</span>
+          <span class="spec">ETA: 04/24</span>
+        </div>
+        <div class="terminal">
+          <div class="lbl">› Title</div>
+          <input value="Complete Phase 09 discovery pipeline" />
+        </div>
+        <div class="row-3">
+          <div class="terminal"><div class="lbl">Status</div><input value="in progress" /></div>
+          <div class="terminal"><div class="lbl">Priority</div>
+            <select><option>URGENT</option><option>HIGH</option><option>NORMAL</option></select>
+          </div>
+          <div class="terminal"><div class="lbl">Due</div><input type="date" value="2026-04-24" /></div>
+        </div>
+        <div class="terminal">
+          <div class="lbl">› Spec // Description</div>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load
+- Add spot-check template for first approved cohort
+- Audit: no IC_API calls until trial reactivation</textarea>
+        </div>
+        <div class="recipe-steps">
+          <div class="rsh">› Production Steps</div>
+          <div class="rs done"><span class="step">01</span><span class="arrow">▸</span><span>09-01 data_completeness format</span><span class="out">DONE ✓</span></div>
+          <div class="rs done"><span class="step">02</span><span class="arrow">▸</span><span>09-02 import cleanup</span><span class="out">DONE ✓</span></div>
+          <div class="rs"><span class="step">03</span><span class="arrow">▸</span><span>09-03 spot-check template</span><span class="out">PENDING</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="module">
+        <div class="module-head"><span>SCHEDULE</span><span class="prod">7D PLAN</span></div>
+        <div class="module-body">
+          <div class="day today">● TODAY · THU APR 23</div>
+          <div class="ev"><div class="dot" style="background: var(--orange); box-shadow: 0 0 6px var(--orange);"></div><div><div class="t">Standup: Daily</div><div class="w">Vitabae</div></div><div class="tm">09:30</div></div>
+          <div class="ev"><div class="dot" style="background: var(--blue); box-shadow: 0 0 6px var(--blue);"></div><div><div class="t">1:1 with Isaac</div><div class="w">Work</div></div><div class="tm">11:00</div></div>
+          <div class="day">FRI APR 24</div>
+          <div class="ev"><div class="dot" style="background: var(--red); box-shadow: 0 0 6px var(--red);"></div><div><div class="t">Phase 09 review</div><div class="w">Vitabae</div></div><div class="tm">14:00</div></div>
+          <div class="ev"><div class="dot" style="background: var(--yellow); box-shadow: 0 0 6px var(--yellow);"></div><div><div class="t">EOW report</div><div class="w">Work</div></div><div class="tm">16:30</div></div>
+        </div>
+      </div>
+      <div class="module">
+        <div class="module-head"><span>COMMS BUFFER</span><span class="prod">3 MSG</span></div>
+        <div class="module-body">
+          <div class="em unread">
+            <div class="from"><span class="name">SINA NEKOUEI</span><span>10:12</span></div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on institutional-memory angle…</div>
+          </div>
+          <div class="em unread">
+            <div class="from"><span class="name">CLICKUP</span><span>09:44</span></div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned "Draft Q3 tracking"…</div>
+          </div>
+          <div class="em">
+            <div class="from"><span class="name">MODASH BILLING</span><span>YESTERDAY</span></div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="tel"><span class="led"></span> NET <strong>ONLINE</strong></div>
+    <div class="tel"><span class="led"></span> CLICKUP <strong>READY</strong></div>
+    <div class="tel"><span class="led"></span> GOOGLE <strong>READY</strong></div>
+    <div class="tel"><span class="led" style="background: var(--yellow); box-shadow: 0 0 4px var(--yellow);"></span> SCHEDULER <strong>7 JOBS</strong></div>
+    <div class="tel right">UPTIME <strong>04:12:19</strong></div>
+  </div>
+</div>
+</body>
+</html>

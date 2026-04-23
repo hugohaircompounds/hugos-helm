@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Tactical HUD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e14;
+  --bg-panel: #0f141c;
+  --bg-panel-hi: #151c27;
+  --border: #223046;
+  --border-hi: #2d4166;
+  --cyan: #00e0ff;
+  --cyan-dim: #0090ad;
+  --orange: #ff9e00;
+  --orange-dim: #a86a00;
+  --green: #26ff85;
+  --red: #ff4060;
+  --ink: #d4dbe6;
+  --ink-muted: #6a7890;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+  letter-spacing: 0.5px;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* tactical grid background */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: -1;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.3;
+  mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black, transparent);
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; position: relative; }
+
+/* top HUD bar */
+.hud-top {
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  padding: 14px 20px; gap: 30px; align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-panel) 0%, var(--bg) 100%);
+  position: relative;
+}
+.hud-top::before, .hud-top::after {
+  content: ""; position: absolute; bottom: -1px; width: 200px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+.hud-top::before { left: 30%; }
+.hud-top::after { right: 30%; }
+
+.brand {
+  font-weight: 700; letter-spacing: 6px; color: var(--cyan);
+  font-size: 16px; text-shadow: 0 0 10px rgba(0,224,255,0.6);
+}
+.brand small { color: var(--ink-muted); letter-spacing: 3px; font-size: 10px; margin-left: 12px; font-weight: 500; }
+
+.center-timer {
+  display: flex; align-items: center; gap: 20px;
+  padding: 8px 24px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-hi);
+  clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
+.center-timer .label {
+  font-size: 10px; letter-spacing: 4px; color: var(--ink-muted);
+}
+.center-timer .task { font-weight: 600; font-size: 15px; color: var(--ink); }
+.center-timer .clock {
+  font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700;
+  color: var(--cyan); text-shadow: 0 0 8px rgba(0,224,255,0.5);
+}
+.status-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 12px var(--green);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+.hud-right { display: flex; justify-content: flex-end; gap: 10px; }
+.btn {
+  background: transparent; color: var(--ink); border: 1px solid var(--border-hi);
+  padding: 6px 16px; font-family: 'Rajdhani', sans-serif; font-size: 12px;
+  letter-spacing: 2px; cursor: pointer; font-weight: 500;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+.btn:hover { background: var(--bg-panel-hi); color: var(--cyan); }
+.btn.danger { color: var(--red); border-color: var(--red); }
+.btn.danger:hover { background: rgba(255,64,96,0.15); }
+
+/* nav tabs */
+.nav {
+  display: flex; background: var(--bg-panel);
+  border-bottom: 1px solid var(--border); padding: 0 20px;
+}
+.tab {
+  padding: 10px 22px; cursor: pointer; font-size: 12px; font-weight: 500;
+  letter-spacing: 3px; color: var(--ink-muted);
+  border-right: 1px solid var(--border);
+  position: relative;
+}
+.tab.active { color: var(--cyan); background: var(--bg); }
+.tab.active::after {
+  content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px;
+  background: var(--cyan); box-shadow: 0 0 8px var(--cyan);
+}
+.nav-stats { margin-left: auto; display: flex; align-items: center; gap: 16px; padding-right: 10px; }
+.stat { font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); }
+.stat strong { color: var(--ink); font-weight: 600; margin-left: 6px; }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 340px; min-height: 0; gap: 10px; padding: 10px; }
+
+/* panels with corner brackets */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  position: relative;
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+}
+.panel::before, .panel::after,
+.panel > .corner-bl, .panel > .corner-br {
+  content: ""; position: absolute; width: 12px; height: 12px;
+  border-color: var(--cyan);
+  pointer-events: none;
+}
+.panel::before { top: 0; left: 0; border-top: 2px solid; border-left: 2px solid; }
+.panel::after { top: 0; right: 0; border-top: 2px solid; border-right: 2px solid; }
+.corner-bl { bottom: 0; left: 0; border-bottom: 2px solid var(--cyan); border-left: 2px solid var(--cyan); }
+.corner-br { bottom: 0; right: 0; border-bottom: 2px solid var(--cyan); border-right: 2px solid var(--cyan); }
+
+.panel-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  background: linear-gradient(180deg, rgba(0,224,255,0.06), transparent);
+}
+.panel-header .title {
+  font-size: 11px; letter-spacing: 4px; color: var(--cyan); font-weight: 600;
+}
+.panel-header .meta { font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); }
+.panel-header .meta strong { color: var(--orange); }
+
+.panel-body { flex: 1; overflow: auto; }
+
+/* task list */
+.tg { padding: 8px 14px; }
+.tg-label {
+  font-size: 10px; letter-spacing: 3px; color: var(--orange);
+  padding: 6px 0; display: flex; justify-content: space-between;
+  border-bottom: 1px solid var(--border); margin-bottom: 6px;
+}
+.task {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; margin-bottom: 4px; cursor: pointer;
+  border: 1px solid transparent; background: rgba(255,255,255,0.02);
+}
+.task:hover { background: var(--bg-panel-hi); border-color: var(--border-hi); }
+.task.selected { border-color: var(--cyan); background: rgba(0,224,255,0.08); }
+.task.running { border-color: var(--green); }
+.task .n { font-size: 14px; color: var(--ink); font-weight: 500; }
+.task .meta { font-size: 10px; color: var(--ink-muted); letter-spacing: 1px; margin-top: 3px; display: flex; gap: 10px; }
+.task .meta .pill {
+  background: var(--bg); border: 1px solid var(--border-hi);
+  padding: 1px 6px; font-weight: 600; letter-spacing: 1.5px;
+}
+.task .meta .pill.urgent { color: var(--red); border-color: var(--red); }
+.task .meta .pill.high { color: var(--orange); border-color: var(--orange); }
+.go-btn {
+  background: var(--cyan); color: var(--bg); border: none; font-weight: 700;
+  padding: 6px 14px; font-family: inherit; font-size: 11px; letter-spacing: 2px;
+  cursor: pointer; clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+.go-btn.stop { background: var(--red); }
+.go-btn:hover { filter: brightness(1.15); }
+
+/* task detail */
+.detail { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.tag-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.tag {
+  font-size: 10px; padding: 3px 10px; letter-spacing: 2px;
+  background: var(--bg); border: 1px solid var(--border-hi); color: var(--ink-muted);
+}
+.tag.on { color: var(--cyan); border-color: var(--cyan); background: rgba(0,224,255,0.1); }
+
+.field-block {
+  border: 1px solid var(--border); background: var(--bg);
+}
+.field-block .fl {
+  padding: 6px 12px;
+  font-size: 10px; letter-spacing: 3px; color: var(--orange);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between;
+}
+.field-block input, .field-block textarea, .field-block select {
+  width: 100%; background: transparent; color: var(--ink);
+  border: none; padding: 10px 12px; font-family: inherit; font-size: 14px; outline: none;
+}
+.field-block textarea { min-height: 130px; font-family: 'JetBrains Mono', monospace; font-size: 12px; resize: vertical; }
+
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+
+.subtasks { }
+.subtask-item {
+  display: flex; align-items: center; gap: 10px; padding: 6px 12px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.02);
+  margin-bottom: 3px; font-size: 12px;
+}
+.subtask-item .tick { color: var(--ink-muted); }
+
+.sidebar { display: flex; flex-direction: column; gap: 10px; }
+.sidebar .panel { flex: 1; }
+.sidebar .panel-body { padding: 8px; }
+.ev, .em {
+  padding: 10px 12px; margin-bottom: 4px;
+  background: rgba(255,255,255,0.02); border-left: 3px solid var(--cyan);
+  cursor: pointer; font-size: 12px;
+}
+.ev:hover, .em:hover { background: var(--bg-panel-hi); }
+.ev .t { color: var(--ink); font-weight: 500; }
+.ev .w { color: var(--ink-muted); font-size: 10px; letter-spacing: 1px; margin-top: 2px; }
+.em.unread { border-left-color: var(--orange); }
+.em .from { color: var(--cyan); font-size: 11px; font-weight: 600; }
+.em.unread .from { color: var(--orange); }
+.em .subj { color: var(--ink); font-size: 12px; margin-top: 2px; }
+.em .snip { color: var(--ink-muted); font-size: 11px; margin-top: 2px; }
+
+.day { padding: 6px 10px; font-size: 10px; letter-spacing: 2px; color: var(--orange); }
+
+/* footer strip with live indicators */
+.footer {
+  display: flex; gap: 24px; padding: 8px 20px; font-size: 10px; letter-spacing: 2px;
+  color: var(--ink-muted);
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+.footer .grp { display: flex; gap: 8px; align-items: center; }
+.footer strong { color: var(--cyan); font-weight: 700; }
+.led { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.led.amber { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP HUD -->
+  <div class="hud-top">
+    <div>
+      <span class="brand">◆ HELM<small>TACTICAL OPS v0.1</small></span>
+    </div>
+    <div class="center-timer">
+      <div class="status-dot"></div>
+      <div>
+        <div class="label">CURRENT OP</div>
+        <div class="task">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div>
+        <div class="label" style="text-align:right;">T+</div>
+        <div class="clock">02:47:13</div>
+      </div>
+    </div>
+    <div class="hud-right">
+      <button class="btn">⟳ SYNC</button>
+      <button class="btn danger">▪ ABORT</button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <div class="tab active">TASKS</div>
+    <div class="tab">TIMESHEET</div>
+    <div class="tab">SETTINGS</div>
+    <div class="nav-stats">
+      <div class="stat">ACTIVE <strong>14</strong></div>
+      <div class="stat">QUEUE <strong>07</strong></div>
+      <div class="stat">LINK <strong style="color: var(--green);">● UP</strong></div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TASKS -->
+    <div class="panel">
+      <span class="corner-bl"></span><span class="corner-br"></span>
+      <div class="panel-header">
+        <span class="title">TASK REGISTRY</span>
+        <span class="meta">REG · <strong>14</strong> · FILTER: ME</span>
+      </div>
+      <div class="panel-body">
+        <div class="tg">
+          <div class="tg-label">› IN PROGRESS · 3</div>
+          <div class="task selected running">
+            <div>
+              <div class="n">Complete Phase 09 discovery pipeline</div>
+              <div class="meta">
+                <span>CCH-AGENT</span>
+                <span class="pill urgent">URGENT</span>
+                <span>DUE 04/24</span>
+              </div>
+            </div>
+            <button class="go-btn stop">■ STOP</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Refactor creator filter pre-DB load</div>
+              <div class="meta">
+                <span>INGEST</span>
+                <span class="pill high">HIGH</span>
+                <span>DUE 04/26</span>
+              </div>
+            </div>
+            <button class="go-btn">▶ GO</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Checking Email/ClickUp</div>
+              <div class="meta">
+                <span>RECURRING</span>
+                <span class="pill">NORMAL</span>
+              </div>
+            </div>
+            <button class="go-btn">▶ GO</button>
+          </div>
+        </div>
+        <div class="tg">
+          <div class="tg-label">› OPEN · 5</div>
+          <div class="task">
+            <div>
+              <div class="n">Monday Stand Up - Weekly Planning</div>
+              <div class="meta"><span>STANDUP</span><span class="pill">NORMAL</span></div>
+            </div>
+            <button class="go-btn">▶ GO</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Review Sina feedback on agent pitch</div>
+              <div class="meta"><span>SALES</span><span class="pill high">HIGH</span></div>
+            </div>
+            <button class="go-btn">▶ GO</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Reactivate IC_API_KEY trial</div>
+              <div class="meta"><span>BLOCKED</span><span class="pill urgent">URGENT</span></div>
+            </div>
+            <button class="go-btn">▶ GO</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="panel">
+      <span class="corner-bl"></span><span class="corner-br"></span>
+      <div class="panel-header">
+        <span class="title">TARGET DOSSIER</span>
+        <span class="meta mono">ID <strong>CCH-AGENT-247</strong></span>
+      </div>
+      <div class="panel-body detail">
+        <div class="tag-row">
+          <span class="tag on">◉ IN PROGRESS</span>
+          <span class="tag">PRIO: URGENT</span>
+          <span class="tag">LIST: CCH-AGENT</span>
+          <span class="tag">DUE: 04/24</span>
+        </div>
+        <div class="field-block">
+          <div class="fl"><span>TITLE</span></div>
+          <input value="Complete Phase 09 discovery pipeline" />
+        </div>
+        <div class="row-3">
+          <div class="field-block"><div class="fl"><span>STATUS</span></div><input value="in progress" /></div>
+          <div class="field-block"><div class="fl"><span>PRIORITY</span></div>
+            <select><option>URGENT</option><option>HIGH</option><option>NORMAL</option></select>
+          </div>
+          <div class="field-block"><div class="fl"><span>DUE</span></div><input type="date" value="2026-04-24" /></div>
+        </div>
+        <div class="field-block">
+          <div class="fl"><span>DESCRIPTION</span><span>AUTOSAVE</span></div>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load (keep in JSON only)
+- Add spot-check template for first approved cohort</textarea>
+        </div>
+        <div class="subtasks">
+          <div class="tg-label" style="padding: 6px 0; border: none;">› SUBTASKS · 3</div>
+          <div class="subtask-item"><span class="tick">[✔]</span><span>09-01 data_completeness format</span></div>
+          <div class="subtask-item"><span class="tick">[✔]</span><span>09-02 import cleanup</span></div>
+          <div class="subtask-item"><span class="tick" style="color:var(--orange);">[ ]</span><span>09-03 spot-check template</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="panel">
+        <span class="corner-bl"></span><span class="corner-br"></span>
+        <div class="panel-header"><span class="title">OPS SCHEDULE</span><span class="meta">7D</span></div>
+        <div class="panel-body">
+          <div class="day">● TODAY · THU APR 23</div>
+          <div class="ev"><div class="t">Standup: Daily</div><div class="w">09:30 · VITABAE</div></div>
+          <div class="ev" style="border-left-color: var(--green);"><div class="t">1:1 with Isaac</div><div class="w">11:00 · WORK</div></div>
+          <div class="day">FRI APR 24</div>
+          <div class="ev" style="border-left-color: var(--red);"><div class="t">Phase 09 review</div><div class="w">14:00 · VITABAE</div></div>
+          <div class="ev" style="border-left-color: var(--orange);"><div class="t">End-of-week report</div><div class="w">16:30 · WORK</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <span class="corner-bl"></span><span class="corner-br"></span>
+        <div class="panel-header"><span class="title">COMMS INBOX</span><span class="meta"><strong>3</strong> NEW</span></div>
+        <div class="panel-body">
+          <div class="em unread">
+            <div class="from">Sina Nekouei</div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on institutional-memory angle. I want to see…</div>
+          </div>
+          <div class="em unread">
+            <div class="from">ClickUp</div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned task "Draft Q3 tracking" to you…</div>
+          </div>
+          <div class="em">
+            <div class="from">Modash Billing</div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="grp"><span class="led"></span> NET <strong>ONLINE</strong></div>
+    <div class="grp"><span class="led"></span> CLICKUP <strong>READY</strong></div>
+    <div class="grp"><span class="led"></span> GOOGLE <strong>READY</strong></div>
+    <div class="grp"><span class="led amber"></span> SCHEDULER <strong>7 JOBS</strong></div>
+    <div class="grp mono" style="margin-left:auto;">TZ NY · UPTIME <strong>04:12:19</strong></div>
+  </div>
+</div>
+</body>
+</html>

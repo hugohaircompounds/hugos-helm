@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Neon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #08060d;
+  --bg-panel: #0d0a16;
+  --bg-deep: #050309;
+  --border: #251d3a;
+  --border-hi: #3b2a5e;
+  --magenta: #ff00aa;
+  --magenta-dim: #a60070;
+  --cyan: #00e5ff;
+  --cyan-dim: #008ea0;
+  --yellow: #fff33a;
+  --green: #00ff85;
+  --red: #ff3b5c;
+  --ink: #e0daf0;
+  --ink-muted: #7a6d96;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
+}
+.mono { font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; }
+
+/* dense grid */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255,0,170,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+/* big glowing orbs in the background */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(ellipse 40% 40% at 10% 0%, rgba(255,0,170,0.12), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 100% 100%, rgba(0,229,255,0.12), transparent 50%);
+}
+
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* top neon strip */
+.neon-strip {
+  height: 2px;
+  background: linear-gradient(90deg, var(--magenta), var(--cyan), var(--yellow), var(--magenta));
+  background-size: 200% 100%;
+  animation: slide 6s linear infinite;
+  box-shadow: 0 0 14px rgba(255,0,170,0.5);
+}
+@keyframes slide { to { background-position: 200% 0; } }
+
+.top {
+  display: flex; align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--bg-panel), var(--bg));
+}
+.top > div { padding: 12px 18px; border-right: 1px solid var(--border); }
+.top > div:last-child { border-right: none; }
+.brand-box {
+  display: flex; flex-direction: column; justify-content: center;
+}
+.brand {
+  font-weight: 700; font-size: 20px; letter-spacing: 8px;
+  background: linear-gradient(90deg, var(--magenta), var(--cyan));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 10px rgba(255,0,170,0.4));
+}
+.brand-sub { font-size: 10px; letter-spacing: 3px; color: var(--magenta-dim); margin-top: 2px; }
+
+.timer-box {
+  flex: 1; display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center;
+}
+.dot {
+  width: 10px; height: 10px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 14px var(--green);
+  animation: beat 1s ease-in-out infinite;
+}
+@keyframes beat { 0%,100% { transform: scale(1); } 50% { transform: scale(1.4); } }
+.task-box .lbl {
+  font-size: 10px; letter-spacing: 3px; color: var(--cyan); text-transform: uppercase;
+}
+.task-box .name { font-size: 16px; font-weight: 500; color: var(--ink); margin-top: 2px; }
+.clock-box { text-align: right; }
+.clock-box .lbl { font-size: 10px; letter-spacing: 3px; color: var(--magenta); text-transform: uppercase; }
+.clock-box .clock {
+  font-family: 'Share Tech Mono', monospace; font-size: 30px;
+  color: var(--cyan); letter-spacing: 4px;
+  text-shadow: 0 0 12px rgba(0,229,255,0.7);
+}
+
+.ctl-box { display: flex; align-items: center; gap: 8px; }
+.btn {
+  background: transparent; color: var(--ink); border: 1px solid var(--border-hi);
+  padding: 7px 14px; font-family: inherit; font-weight: 600; font-size: 11px;
+  letter-spacing: 2px; cursor: pointer; text-transform: uppercase;
+  position: relative;
+}
+.btn:hover {
+  color: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(0,229,255,0.5);
+}
+.btn.kill { color: var(--red); border-color: var(--red); }
+.btn.kill:hover { background: rgba(255,59,92,0.1); box-shadow: 0 0 12px rgba(255,59,92,0.6); }
+
+/* nav */
+.nav {
+  display: flex; padding: 0; background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  padding: 10px 24px; font-weight: 600; font-size: 11px;
+  letter-spacing: 3px; color: var(--ink-muted); cursor: pointer;
+  border-right: 1px solid var(--border); text-transform: uppercase;
+  position: relative;
+}
+.tab.active { color: var(--magenta); background: var(--bg); }
+.tab.active::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: var(--magenta); box-shadow: 0 0 10px var(--magenta);
+}
+.tab.active::after {
+  content: "▼"; position: absolute; bottom: -1px; left: 50%;
+  transform: translateX(-50%); font-size: 8px; color: var(--magenta);
+}
+.nav-stats {
+  margin-left: auto; display: flex; gap: 0; align-items: stretch;
+}
+.nav-stats .s {
+  padding: 10px 14px; border-left: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+}
+.nav-stats .s strong { color: var(--yellow); font-weight: 700; letter-spacing: 1px; }
+.nav-stats .s.online { color: var(--green); }
+
+.main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 360px; gap: 8px; padding: 8px; min-height: 0; }
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+  position: relative;
+}
+.panel::before {
+  content: ""; position: absolute; top: -1px; left: 20px; right: 20px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--magenta) 30%, var(--cyan) 70%, transparent);
+  box-shadow: 0 0 6px rgba(255,0,170,0.4);
+}
+.panel-head {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.panel-head .title {
+  font-size: 11px; letter-spacing: 4px; color: var(--cyan); font-weight: 700;
+  text-transform: uppercase;
+  text-shadow: 0 0 8px rgba(0,229,255,0.4);
+}
+.panel-head .title::before { content: "// "; color: var(--magenta); }
+.panel-head .meta { font-size: 10px; letter-spacing: 2px; color: var(--ink-muted); }
+.panel-head .meta strong { color: var(--yellow); font-weight: 700; }
+.panel-body { flex: 1; overflow: auto; }
+
+/* tasks */
+.grp { padding: 10px 12px; }
+.grp-head {
+  font-size: 10px; letter-spacing: 3px; color: var(--magenta); text-transform: uppercase;
+  font-weight: 700; padding: 4px 6px;
+  display: flex; justify-content: space-between;
+  border-bottom: 1px solid var(--border); margin-bottom: 6px;
+}
+.grp-head::before { content: "◆ "; color: var(--cyan); }
+
+.task {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px; margin-bottom: 3px; cursor: pointer;
+  background: rgba(255,255,255,0.015); border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.task:hover {
+  background: rgba(0,229,255,0.05);
+  border-color: var(--cyan-dim);
+}
+.task.selected {
+  background: rgba(255,0,170,0.08);
+  border-color: var(--magenta);
+  box-shadow: inset 3px 0 0 var(--magenta), 0 0 20px rgba(255,0,170,0.15);
+}
+.task.running .n { color: var(--green); }
+.task .n { font-size: 14px; color: var(--ink); font-weight: 500; }
+.task .m {
+  font-size: 10px; color: var(--ink-muted); letter-spacing: 1.5px;
+  margin-top: 3px; display: flex; gap: 8px; text-transform: uppercase;
+}
+.task .m .tag { padding: 1px 8px; background: var(--bg-deep); border: 1px solid var(--border-hi); font-weight: 600; }
+.task .m .tag.urgent { color: var(--red); border-color: var(--red); box-shadow: 0 0 6px rgba(255,59,92,0.4); }
+.task .m .tag.high { color: var(--yellow); border-color: var(--yellow); }
+.task .m .tag.due { color: var(--cyan); border-color: var(--cyan-dim); }
+.zap-btn {
+  background: var(--magenta); color: var(--bg);
+  border: none; padding: 6px 12px; font-family: inherit; font-weight: 700;
+  font-size: 10px; letter-spacing: 2px; cursor: pointer; text-transform: uppercase;
+  box-shadow: 0 0 10px rgba(255,0,170,0.4);
+}
+.zap-btn.stop { background: var(--red); box-shadow: 0 0 10px rgba(255,59,92,0.4); }
+.zap-btn:hover { filter: brightness(1.2); }
+
+/* detail */
+.detail { padding: 14px 18px; display: flex; flex-direction: column; gap: 14px; }
+.d-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.d-tag {
+  padding: 3px 10px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  background: var(--bg-deep); border: 1px solid var(--border-hi); color: var(--ink-muted);
+  font-weight: 600;
+}
+.d-tag.active { color: var(--green); border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,133,0.3); }
+.d-tag.prio { color: var(--red); border-color: var(--red); }
+
+.d-field {
+  background: var(--bg-deep); border: 1px solid var(--border);
+}
+.d-field .fl {
+  padding: 5px 12px; font-size: 10px; letter-spacing: 3px; color: var(--magenta);
+  font-weight: 700; text-transform: uppercase; border-bottom: 1px solid var(--border);
+}
+.d-field input, .d-field select, .d-field textarea {
+  width: 100%; background: transparent; color: var(--ink);
+  border: none; padding: 9px 12px; font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; outline: none;
+}
+.d-field input:focus { box-shadow: inset 0 -2px 0 var(--cyan); }
+.d-field textarea { font-family: 'Share Tech Mono', monospace; min-height: 120px; resize: vertical; font-size: 12px; }
+
+.row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+.subtasks { }
+.subtasks .hd {
+  font-size: 10px; letter-spacing: 3px; color: var(--cyan); font-weight: 700;
+  text-transform: uppercase; margin-bottom: 6px;
+}
+.st {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: rgba(255,255,255,0.02); border-left: 2px solid var(--border-hi);
+  margin-bottom: 3px; font-size: 13px;
+}
+.st.done { border-left-color: var(--green); }
+.st.done .n { color: var(--ink-muted); text-decoration: line-through; }
+.st .c { font-family: 'Share Tech Mono', monospace; color: var(--cyan); }
+.st.done .c { color: var(--green); }
+
+/* sidebar */
+.sidebar { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.sidebar .panel { flex: 1; }
+.day {
+  padding: 8px 14px 4px; font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 700;
+}
+.day.today { color: var(--magenta); }
+.day.today::before { content: "● "; color: var(--magenta); }
+
+.ev {
+  display: grid; grid-template-columns: 3px 1fr auto; gap: 10px;
+  padding: 10px 14px; cursor: pointer; border-bottom: 1px dashed var(--border);
+}
+.ev:hover { background: rgba(0,229,255,0.04); }
+.ev .bar { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.ev .t { font-size: 13px; color: var(--ink); font-weight: 500; }
+.ev .w { font-size: 11px; color: var(--ink-muted); margin-top: 2px; }
+.ev .tm { font-family: 'Share Tech Mono', monospace; color: var(--yellow); font-size: 11px; align-self: center; }
+
+.em {
+  padding: 10px 14px; cursor: pointer; border-bottom: 1px dashed var(--border);
+}
+.em:hover { background: rgba(255,0,170,0.04); }
+.em .top-line { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 1px; }
+.em.unread .top-line .from { color: var(--magenta); font-weight: 700; }
+.em .subj { font-size: 13px; color: var(--ink); margin-top: 3px; font-weight: 500; }
+.em .snip { font-size: 11px; color: var(--ink-muted); margin-top: 3px; }
+.em.unread .subj { color: var(--ink); }
+.em.unread::before {
+  content: ""; display: inline-block; width: 8px; height: 8px;
+  background: var(--magenta); margin-right: 8px; vertical-align: middle;
+  box-shadow: 0 0 8px var(--magenta);
+}
+
+/* footer */
+.footer {
+  display: flex; gap: 0; padding: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg-deep);
+}
+.footer .stat {
+  padding: 6px 14px;
+  font-size: 10px; letter-spacing: 2px; color: var(--ink-muted);
+  border-right: 1px solid var(--border); text-transform: uppercase;
+  display: flex; align-items: center; gap: 6px;
+}
+.footer .stat strong { font-weight: 700; font-family: 'Share Tech Mono', monospace; letter-spacing: 1px; }
+.footer .stat.ok strong { color: var(--green); }
+.footer .stat.warn strong { color: var(--yellow); }
+.footer .stat.info strong { color: var(--cyan); }
+.footer .stat.info2 strong { color: var(--magenta); }
+.footer .right { margin-left: auto; border-right: none; border-left: 1px solid var(--border); }
+.led {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="neon-strip"></div>
+
+  <!-- TOP -->
+  <div class="top">
+    <div class="brand-box">
+      <div class="brand">HELM</div>
+      <div class="brand-sub">OPERATOR v0.1</div>
+    </div>
+    <div class="timer-box">
+      <div class="dot"></div>
+      <div class="task-box">
+        <div class="lbl">▶ Running Task</div>
+        <div class="name">Complete Phase 09 discovery pipeline</div>
+      </div>
+      <div class="clock-box">
+        <div class="lbl">Elapsed</div>
+        <div class="clock">02:47:13</div>
+      </div>
+    </div>
+    <div class="ctl-box">
+      <button class="btn">⟳ Sync</button>
+      <button class="btn kill">▪ Stop</button>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <div class="nav">
+    <div class="tab active">TASKS</div>
+    <div class="tab">TIMESHEET</div>
+    <div class="tab">SETTINGS</div>
+    <div class="nav-stats">
+      <div class="s">Tasks <strong>14</strong></div>
+      <div class="s">Queue <strong>7</strong></div>
+      <div class="s online"><span class="led"></span>LINK UP</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TASKS -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="title">Task Stack</span>
+        <span class="meta"><strong>14</strong> / ASSIGNED</span>
+      </div>
+      <div class="panel-body">
+        <div class="grp">
+          <div class="grp-head"><span>› In Progress</span><span>3</span></div>
+          <div class="task selected running">
+            <div>
+              <div class="n">Complete Phase 09 discovery pipeline</div>
+              <div class="m">
+                <span class="tag urgent">Urgent</span>
+                <span class="tag">CCH-Agent</span>
+                <span class="tag due">Due 04/24</span>
+              </div>
+            </div>
+            <button class="zap-btn stop">Stop</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Refactor creator filter pre-DB load</div>
+              <div class="m">
+                <span class="tag high">High</span>
+                <span class="tag">Ingest</span>
+                <span class="tag due">Due 04/26</span>
+              </div>
+            </div>
+            <button class="zap-btn">Run</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Checking Email/ClickUp</div>
+              <div class="m"><span class="tag">Normal</span><span class="tag">Recurring</span></div>
+            </div>
+            <button class="zap-btn">Run</button>
+          </div>
+
+          <div class="grp-head" style="margin-top:14px;"><span>› Open</span><span>5</span></div>
+          <div class="task">
+            <div>
+              <div class="n">Monday Stand Up - Weekly Planning</div>
+              <div class="m"><span class="tag">Normal</span><span class="tag">Standup</span></div>
+            </div>
+            <button class="zap-btn">Run</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Review Sina feedback on agent pitch</div>
+              <div class="m"><span class="tag high">High</span><span class="tag">Sales</span></div>
+            </div>
+            <button class="zap-btn">Run</button>
+          </div>
+          <div class="task">
+            <div>
+              <div class="n">Reactivate IC_API_KEY trial</div>
+              <div class="m"><span class="tag urgent">Urgent</span><span class="tag">Blocked</span></div>
+            </div>
+            <button class="zap-btn">Run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETAIL -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="title">Target Data</span>
+        <span class="meta mono">ID: CCH-AGENT-247</span>
+      </div>
+      <div class="panel-body detail">
+        <div class="d-tags">
+          <span class="d-tag active">● In Progress</span>
+          <span class="d-tag prio">Priority: Urgent</span>
+          <span class="d-tag">CCH-Agent</span>
+          <span class="d-tag">Due 04/24</span>
+        </div>
+        <div class="d-field">
+          <div class="fl">Title</div>
+          <input value="Complete Phase 09 discovery pipeline" />
+        </div>
+        <div class="row-3">
+          <div class="d-field"><div class="fl">Status</div><input value="in progress" /></div>
+          <div class="d-field"><div class="fl">Priority</div>
+            <select><option>Urgent</option><option>High</option><option>Normal</option></select>
+          </div>
+          <div class="d-field"><div class="fl">Due</div><input type="date" value="2026-04-24" /></div>
+        </div>
+        <div class="d-field">
+          <div class="fl">Description</div>
+          <textarea>Finalize the creator discovery job.
+- Wire Modash YouTube fetcher to cache layer
+- Ensure disqualified creators filtered PRE-load (keep in JSON only)
+- Add spot-check template for first approved cohort
+- Audit: no IC_API calls until trial reactivation</textarea>
+        </div>
+        <div class="subtasks">
+          <div class="hd">// Subtasks · 3</div>
+          <div class="st done"><span class="c">[✓]</span><span class="n">09-01 data_completeness format</span></div>
+          <div class="st done"><span class="c">[✓]</span><span class="n">09-02 import cleanup</span></div>
+          <div class="st"><span class="c">[ ]</span><span class="n">09-03 spot-check template</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="title">Schedule</span>
+          <span class="meta mono">7D</span>
+        </div>
+        <div class="panel-body">
+          <div class="day today">Today · Thu Apr 23</div>
+          <div class="ev">
+            <div class="bar"></div>
+            <div><div class="t">Standup: Daily</div><div class="w">Vitabae</div></div>
+            <div class="tm">09:30</div>
+          </div>
+          <div class="ev">
+            <div class="bar" style="background: var(--green); box-shadow: 0 0 8px var(--green);"></div>
+            <div><div class="t">1:1 with Isaac</div><div class="w">Work</div></div>
+            <div class="tm">11:00</div>
+          </div>
+          <div class="day">Fri Apr 24</div>
+          <div class="ev">
+            <div class="bar" style="background: var(--red); box-shadow: 0 0 8px var(--red);"></div>
+            <div><div class="t">Phase 09 review</div><div class="w">Vitabae</div></div>
+            <div class="tm">14:00</div>
+          </div>
+          <div class="ev">
+            <div class="bar" style="background: var(--yellow); box-shadow: 0 0 8px var(--yellow);"></div>
+            <div><div class="t">End-of-week report</div><div class="w">Work</div></div>
+            <div class="tm">16:30</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">
+          <span class="title">Inbox</span>
+          <span class="meta"><strong>3</strong> UNREAD</span>
+        </div>
+        <div class="panel-body">
+          <div class="em unread">
+            <div class="top-line"><span class="from">Sina Nekouei</span><span>10:12</span></div>
+            <div class="subj">Re: CCH agent positioning</div>
+            <div class="snip">Let's regroup on the institutional-memory angle…</div>
+          </div>
+          <div class="em unread">
+            <div class="top-line"><span class="from">ClickUp</span><span>09:44</span></div>
+            <div class="subj">Assigned: CCH-AGENT-251</div>
+            <div class="snip">Isaac assigned "Draft Q3 tracking" to you…</div>
+          </div>
+          <div class="em">
+            <div class="top-line"><span class="from">Modash Billing</span><span>Yesterday</span></div>
+            <div class="subj">Trial ends in 3 days</div>
+            <div class="snip">Upgrade to continue full access…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="stat ok"><span class="led"></span> NET <strong>ONLINE</strong></div>
+    <div class="stat ok"><span class="led"></span> CLICKUP <strong>READY</strong></div>
+    <div class="stat ok"><span class="led"></span> GOOGLE <strong>READY</strong></div>
+    <div class="stat warn">SCHEDULER <strong>7 JOBS</strong></div>
+    <div class="stat info">TZ <strong>AMERICA/NY</strong></div>
+    <div class="stat info2 right">UPTIME <strong>04:12:19</strong></div>
+  </div>
+</div>
+</body>
+</html>

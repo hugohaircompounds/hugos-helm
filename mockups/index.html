@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Helm — Aesthetic Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #0b0d14;
+  color: #e8ebf2;
+  padding: 40px;
+  overflow-y: auto;
+}
+h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.5px; }
+.sub { color: #7b8499; margin-bottom: 30px; max-width: 720px; line-height: 1.5; }
+.section-h {
+  font-size: 12px; letter-spacing: 3px; color: #7b8499; text-transform: uppercase;
+  margin: 40px 0 14px;
+}
+.section-h:first-of-type { margin-top: 10px; }
+.grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 1200px; }
+.card {
+  background: #141824; border: 1px solid #232938; border-radius: 14px;
+  padding: 24px; text-decoration: none; color: inherit; display: block;
+  transition: all 0.15s; cursor: pointer;
+}
+.card:hover { border-color: #3a4a7a; transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); }
+.card h2 { margin: 0 0 6px; font-size: 20px; }
+.card .tag { font-size: 11px; letter-spacing: 2px; color: #7b8499; text-transform: uppercase; margin-bottom: 14px; }
+.card p { color: #9aa3b5; line-height: 1.55; margin: 0; font-size: 14px; }
+.swatch { height: 90px; border-radius: 8px; margin-bottom: 14px; display: flex; overflow: hidden; }
+.swatch > div { flex: 1; }
+.link { color: #7aa2ff; margin-top: 14px; display: inline-block; font-size: 13px; font-weight: 500; }
+</style>
+</head>
+<body>
+<h1>Helm — pick an aesthetic</h1>
+<p class="sub">Seven directions. Click any card to open full-screen. Each is self-contained with fake data — just the vibe. After you pick one, the real app gets ported over (colors, fonts, panel treatments, corner styling, indicators, etc.).</p>
+
+<div class="section-h">Core directions</div>
+<div class="grid">
+  <a class="card" href="02-tactical-hud.html">
+    <div class="swatch">
+      <div style="background:#0a0e14;"></div>
+      <div style="background:#0f141c;"></div>
+      <div style="background:#00e0ff;"></div>
+      <div style="background:#ff9e00;"></div>
+      <div style="background:#223046;"></div>
+    </div>
+    <div class="tag">02 / Core</div>
+    <h2>Tactical HUD</h2>
+    <p>Cyan + orange, corner brackets on every panel. Military ops console — data-rich, angular, every pixel has a purpose.</p>
+    <span class="link">Open →</span>
+  </a>
+
+  <a class="card" href="03-ethereal.html">
+    <div class="swatch">
+      <div style="background:#05070d;"></div>
+      <div style="background:#0a0f1c;"></div>
+      <div style="background:#7aa2ff;"></div>
+      <div style="background:#c4a7ff;"></div>
+      <div style="background:#5fe3d1;"></div>
+    </div>
+    <div class="tag">03 / Core</div>
+    <h2>Ethereal</h2>
+    <p>Soft blue glows, glassmorphism, subtle starfield. Refined sci-fi — a starship bridge where the UI whispers.</p>
+    <span class="link">Open →</span>
+  </a>
+
+  <a class="card" href="04-neon.html">
+    <div class="swatch">
+      <div style="background:#08060d;"></div>
+      <div style="background:#0d0a16;"></div>
+      <div style="background:#ff00aa;"></div>
+      <div style="background:#00e5ff;"></div>
+      <div style="background:#fff33a;"></div>
+    </div>
+    <div class="tag">04 / Core</div>
+    <h2>Neon</h2>
+    <p>Magenta + cyan + yellow on near-black. Dense grid overlay, glowing accents, cyberpunk operator console.</p>
+    <span class="link">Open →</span>
+  </a>
+</div>
+
+<div class="section-h">Game-inspired</div>
+<div class="grid">
+  <a class="card" href="05-cyberpunk.html">
+    <div class="swatch">
+      <div style="background:#0d0d0d;"></div>
+      <div style="background:#fcee0a;"></div>
+      <div style="background:#0d0d0d;"></div>
+      <div style="background:#ff003c;"></div>
+      <div style="background:#00f0ff;"></div>
+    </div>
+    <div class="tag">05 / Cyberpunk 2077</div>
+    <h2>Cyberpunk</h2>
+    <p>Brutalist yellow slabs, angular clip-paths, "jack in" vibes. Heavy chevrons, glitch flickers, brain-dance framing.</p>
+    <span class="link">Open →</span>
+  </a>
+
+  <a class="card" href="08-terraria.html">
+    <div class="swatch">
+      <div style="background:#5cabff;"></div>
+      <div style="background:#8b5a2b;"></div>
+      <div style="background:#f0dcb3;"></div>
+      <div style="background:#ffdc00;"></div>
+      <div style="background:#b93a3a;"></div>
+    </div>
+    <div class="tag">08 / Terraria</div>
+    <h2>Adventurer's Log</h2>
+    <p>Wood + parchment panels, pixel art, item slots with rarity-colored borders (common → legendary). Cozy but epic.</p>
+    <span class="link">Open →</span>
+  </a>
+
+  <a class="card" href="09-factorio.html">
+    <div class="swatch">
+      <div style="background:#1a1a1a;"></div>
+      <div style="background:#2a2a2a;"></div>
+      <div style="background:#ff9d3f;"></div>
+      <div style="background:#6ec848;"></div>
+      <div style="background:#f0d04e;"></div>
+    </div>
+    <div class="tag">09 / Factorio</div>
+    <h2>Factory Ops</h2>
+    <p>Industrial machine-casing panels, rivets, LED indicator columns, production-line task rows with throughput rates.</p>
+    <span class="link">Open →</span>
+  </a>
+
+  <a class="card" href="10-ror2.html">
+    <div class="swatch">
+      <div style="background:#0a1628;"></div>
+      <div style="background:#0f1f33;"></div>
+      <div style="background:#5cccff;"></div>
+      <div style="background:#ffd000;"></div>
+      <div style="background:#ffa000;"></div>
+    </div>
+    <div class="tag">10 / Risk of Rain 2</div>
+    <h2>Providence</h2>
+    <p>Teleporter-ring timer, rarity-framed item cards, glowing cyan accents, Bebas Neue display type. Clean modern roguelike.</p>
+    <span class="link">Open →</span>
+  </a>
+</div>
+
+</body>
+</html>
