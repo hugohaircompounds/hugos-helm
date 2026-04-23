@@ -13,7 +13,25 @@ Personal work dashboard. ClickUp + Google Calendar + Gmail, with deterministic t
 
 No LLM involvement. All schedules are deterministic cron code.
 
-## Install
+## Download
+
+**Just want to run Helm?** Grab the latest installer from the releases page:
+
+**→ [Download latest release](https://github.com/hugohaircompounds/hugos-helm/releases/latest)**
+
+1. Click on `Helm-Setup-X.Y.Z.exe` under **Assets** (the `.blockmap` and `latest.yml` files are for the auto-updater — you don't need them).
+2. Double-click the downloaded installer. Windows SmartScreen will say *"Windows protected your PC"* — click **More info → Run anyway**. The installer isn't code-signed, which is why SmartScreen flags it; nothing malicious.
+3. Install completes, Helm launches. Open **Settings** to paste your ClickUp Personal API token and Google OAuth credentials (see [First-run](#first-run) below).
+
+### Auto-updates
+
+Helm checks for new releases on every launch. When you publish a new version, every installed copy downloads the update in the background and prompts *"Update ready — Restart now / Later"* on next launch. Nothing for users to configure.
+
+Requirements: **Windows 10/11 x64**. Mac/Linux builds aren't currently produced.
+
+## Developer setup
+
+If you want to build/hack on Helm locally instead of running the pre-built installer:
 
 ```
 npm install
@@ -47,6 +65,10 @@ Vite runs on `http://localhost:5173` and Electron opens once it's up.
 
 3. Output lands in `release/`.
 4. Double-click the installer (or portable exe) and you're off — no more `npm run dev` needed. SQLite DB + keychain tokens are persisted in your user profile, so the installed app has the same settings as the dev build on first launch.
+
+### Publishing a new release
+
+The release loop (version bump → build → publish to GitHub → auto-update rolls out to all installed copies) is documented in [RELEASE.md](./RELEASE.md).
 
 ## Layout
 
