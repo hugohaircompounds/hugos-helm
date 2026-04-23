@@ -44,6 +44,54 @@ Create new ones at https://github.com/settings/personal-access-tokens/new.
 
 ---
 
+## Working locally (before you're ready to release)
+
+Nothing reaches GitHub or your installed Helm until you explicitly run `npm run release`. Until then, changes live only on your machine.
+
+### Start dev mode
+
+```powershell
+npm run dev
+```
+
+This launches Vite (renderer) + Electron (main process) in development mode. A Helm window opens with DevTools attached. Iterate freely:
+
+- Edits to files in `src/` (React/renderer) → hot-reload instantly in the running window.
+- Edits to files in `electron/` (main process, preload, scheduler, services) → **require a full restart**. Stop `npm run dev` with `Ctrl+C` and start it again.
+
+### Typecheck without running
+
+```powershell
+npm run typecheck
+```
+
+Runs `tsc --noEmit` for both renderer and main-process configs. Fast sanity check before committing.
+
+### Build-only (no publish)
+
+```powershell
+npm run dist
+```
+
+Produces `release\Helm Setup X.Y.Z.exe` locally. Useful for testing that the packaged build works before publishing to the world. No GitHub involvement.
+
+### What stays local vs. what goes public
+
+| Action | Runs on your machine? | Touches GitHub? | Updates the installed Helm? |
+|---|---|---|---|
+| Edit code in `src/` or `electron/` | Yes | No | No |
+| `npm run dev` | Yes | No | No |
+| `npm run typecheck` | Yes | No | No |
+| `npm run dist` | Yes | No | No |
+| `git commit` | Yes | No | No |
+| `git push` | Yes | Yes (code only) | No |
+| `npm version patch\|minor\|major` | Yes | No | No |
+| **`npm run release`** | Yes | **Yes — creates a Release** | **Yes — auto-updater picks it up** |
+
+Iterate as long as you want in dev mode. The only moment anything becomes public is `npm run release`.
+
+---
+
 ## The release loop
 
 After making code changes:
