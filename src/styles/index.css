@@ -32,6 +32,9 @@
   --warn: 251 191 36;
   --danger: 248 113 113;
   --scrollbar: #2a3140;
+  /* Timeline entry segment HSL tuning — per-theme overridable. */
+  --entry-sat: 62%;
+  --entry-light: 58%;
 }
 
 [data-theme='default'][data-mode='light'] {
@@ -46,6 +49,35 @@
   --warn: 180 83 9;
   --danger: 185 28 28;
   --scrollbar: #c7ccd4;
+  --entry-sat: 58%;
+  --entry-light: 48%;
+}
+
+/* Tuning for bold-palette themes. Neon & Cyberpunk need brighter, more
+   saturated entries to read against their high-contrast panels. */
+[data-theme='neon'], [data-theme='cyberpunk'] {
+  --entry-sat: 85%;
+  --entry-light: 62%;
+}
+[data-theme='tactical-hud'] {
+  --entry-sat: 70%;
+  --entry-light: 55%;
+}
+[data-theme='terraria'] {
+  --entry-sat: 55%;
+  --entry-light: 50%;
+}
+[data-theme='factorio'] {
+  --entry-sat: 60%;
+  --entry-light: 52%;
+}
+[data-theme='ror2'] {
+  --entry-sat: 65%;
+  --entry-light: 60%;
+}
+[data-theme='ethereal'] {
+  --entry-sat: 55%;
+  --entry-light: 62%;
 }
 
 /* -------- TACTICAL HUD ---------------------------------------------------- */

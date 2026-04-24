@@ -1,5 +1,6 @@
 import type {
   Comment,
+  ListStatus,
   Priority,
   Task,
   TaskDetail,
@@ -180,6 +181,29 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   }));
   const subtasks = (t.subtasks || []).map(normalizeTask);
   return { ...normalizeTask(t), subtasks, comments };
+}
+
+// ClickUp's `GET /list/{id}` response includes the list's configured statuses.
+// Used by the task detail pane's status dropdown so only valid statuses are offered.
+export async function getListStatuses(listId: string): Promise<ListStatus[]> {
+  interface CUListStatus {
+    status: string;
+    color: string;
+    orderindex: number;
+    type?: string;
+  }
+  interface Resp {
+    statuses?: CUListStatus[];
+  }
+  const resp = await cu<Resp>(`/list/${encodeURIComponent(listId)}`);
+  const raw = resp.statuses || [];
+  return raw
+    .map((s) => ({
+      status: s.status,
+      color: s.color,
+      orderindex: typeof s.orderindex === 'number' ? s.orderindex : 0,
+    }))
+    .sort((a, b) => a.orderindex - b.orderindex);
 }
 
 export async function updateTask(

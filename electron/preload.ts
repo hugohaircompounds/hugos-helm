@@ -19,6 +19,7 @@ const api: HelmApi = {
   listTasks: () => ipcRenderer.invoke('clickup:listTasks'),
   getTask: (id) => ipcRenderer.invoke('clickup:getTask', id),
   updateTask: (id, patch) => ipcRenderer.invoke('clickup:updateTask', id, patch),
+  getListStatuses: (listId) => ipcRenderer.invoke('clickup:getListStatuses', listId),
 
   startTimer: (id) => ipcRenderer.invoke('timer:start', id),
   stopTimer: (opts) => ipcRenderer.invoke('timer:stop', opts),

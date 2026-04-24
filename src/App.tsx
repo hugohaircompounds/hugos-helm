@@ -6,6 +6,7 @@ import { useCalendar } from './hooks/useCalendar';
 import { useEmail } from './hooks/useEmail';
 import { useLayout } from './hooks/useLayout';
 import { useTheme } from './hooks/useTheme';
+import { useTimeEntries, type TimesheetRange } from './hooks/useTimeEntries';
 import { TimerBar } from './components/TimerBar';
 import { ThemePicker } from './components/ThemePicker';
 import { ModeToggle } from './components/ModeToggle';
@@ -14,6 +15,7 @@ import { TaskDetail } from './components/TaskDetail';
 import { CalendarFeed } from './components/CalendarFeed';
 import { EmailFeed } from './components/EmailFeed';
 import { TimesheetEditor } from './components/TimesheetEditor';
+import { TimeEntryDetail } from './components/TimeEntryDetail';
 import { DescriptionPrompt } from './components/DescriptionPrompt';
 import { Settings } from './components/Settings';
 import { ResizableColumns } from './components/ResizableColumns';
@@ -30,7 +32,14 @@ export default function App() {
 
   const [tab, setTab] = useState<Tab>('tasks');
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [timesheetRange, setTimesheetRange] = useState<TimesheetRange>('today');
+  const timesheet = useTimeEntries(timesheetRange);
   const [prompt, setPrompt] = useState<DescriptionPromptPayload | null>(null);
+
+  const selectedEntry = selectedEntryId
+    ? timesheet.entries.find((e) => e.id === selectedEntryId) || null
+    : null;
 
   useEffect(() => {
     return window.helm.onDescriptionPrompt(setPrompt);
@@ -79,25 +88,41 @@ export default function App() {
                 lexicon={lexicon}
               />
             )}
-            {tab === 'timesheet' && <TimesheetEditor />}
+            {tab === 'timesheet' && (
+              <TimesheetEditor
+                entries={timesheet.entries}
+                loading={timesheet.loading}
+                error={timesheet.error}
+                range={timesheetRange}
+                onRangeChange={setTimesheetRange}
+                onRefresh={timesheet.load}
+                selectedEntryId={selectedEntryId}
+                onSelectEntry={setSelectedEntryId}
+              />
+            )}
             {tab === 'settings' && <Settings tasks={tasks} onChanged={refreshTasks} />}
           </section>
         }
         middle={
           <section data-slot="panel" className="h-full overflow-auto">
-            {tab === 'tasks' ? (
+            {tab === 'tasks' && (
               <TaskDetail
                 taskId={selected}
                 initialTask={tasks.find((t) => t.id === selected) || null}
                 onUpdated={refreshTasks}
                 lexicon={lexicon}
               />
-            ) : (
-              <div className="p-4 text-inkMuted text-sm">
-                {tab === 'timesheet'
-                  ? 'Click Edit on an entry to adjust it.'
-                  : 'Settings saved automatically.'}
-              </div>
+            )}
+            {tab === 'timesheet' && (
+              <TimeEntryDetail
+                entry={selectedEntry}
+                onSave={timesheet.save}
+                onDelete={timesheet.remove}
+                onClose={() => setSelectedEntryId(null)}
+              />
+            )}
+            {tab === 'settings' && (
+              <div className="p-4 text-inkMuted text-sm">Settings saved automatically.</div>
             )}
           </section>
         }

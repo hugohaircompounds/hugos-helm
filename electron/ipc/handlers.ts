@@ -70,6 +70,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     'clickup:updateTask',
     (_e, id: string, patch: Partial<Task>) => clickup.updateTask(id, patch)
   );
+  ipcMain.handle('clickup:getListStatuses', (_e, listId: string) =>
+    clickup.getListStatuses(listId)
+  );
 
   ipcMain.handle('timer:start', async (_e, taskId: string) => {
     return timerStart(taskId, { rememberResume: false });

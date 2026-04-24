@@ -5,7 +5,9 @@ import type {
   TaskDetail as TaskDetailType,
   ThemeLexicon,
 } from '../../shared/types';
+import { dueUrgency } from '../utils/time';
 import { useTaskDetailCache } from '../hooks/useTaskDetailCache';
+import { useListStatuses } from '../hooks/useListStatuses';
 
 interface Props {
   taskId: string | null;
@@ -34,15 +36,6 @@ function priorityKey(p: Priority): string | undefined {
   if (p === 2) return 'high';
   if (p === 3) return 'normal';
   if (p === 4) return 'low';
-  return undefined;
-}
-
-function dueUrgency(due: number): 'overdue' | 'soon' | undefined {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const endOfTomorrow = startOfToday + 2 * 24 * 60 * 60 * 1000;
-  if (due < startOfToday) return 'overdue';
-  if (due < endOfTomorrow) return 'soon';
   return undefined;
 }
 
@@ -193,13 +186,11 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="text-xs text-inkMuted uppercase tracking-wider">Status</label>
-          <input
-            key={`status-${detail.id}`}
-            className="w-full bg-panel border border-border rounded px-3 py-2 mt-1"
-            defaultValue={detail.status}
-            onBlur={(e) => {
-              if (e.target.value !== detail.status) save('status', e.target.value);
-            }}
+          <StatusSelect
+            listId={detail.listId}
+            currentStatus={detail.status}
+            currentColor={detail.statusColor}
+            onChange={(next) => save('status', next)}
           />
         </div>
         <div>
@@ -298,6 +289,66 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
         </section>
       )}
       </div>
+    </div>
+  );
+}
+
+function StatusSelect({
+  listId,
+  currentStatus,
+  currentColor,
+  onChange,
+}: {
+  listId: string | null;
+  currentStatus: string;
+  currentColor: string | null;
+  onChange: (next: string) => void;
+}) {
+  const { statuses, loading, error } = useListStatuses(listId);
+
+  // If the list-statuses call fails or the current status isn't in the list
+  // (can happen for statuses from other spaces), fall back to a text input
+  // so the user never loses the ability to change state.
+  const hasCurrent = statuses.some((s) => s.status === currentStatus);
+  const showFallback = !listId || error || (!loading && !hasCurrent && statuses.length === 0);
+
+  if (showFallback) {
+    return (
+      <input
+        key={`status-fallback-${currentStatus}`}
+        className="w-full bg-panel border border-border rounded px-3 py-2 mt-1"
+        defaultValue={currentStatus}
+        onBlur={(e) => {
+          if (e.target.value !== currentStatus) onChange(e.target.value);
+        }}
+      />
+    );
+  }
+
+  const options = hasCurrent
+    ? statuses
+    : [
+        ...statuses,
+        { status: currentStatus, color: currentColor || '#8b93a7', orderindex: 999 },
+      ];
+
+  return (
+    <div className="relative flex items-center">
+      <span
+        className="absolute left-2 h-2 w-2 rounded-full pointer-events-none"
+        style={{ background: currentColor || '#8b93a7' }}
+      />
+      <select
+        className="w-full bg-panel border border-border rounded pl-6 pr-2 py-2 mt-1 appearance-none"
+        value={currentStatus}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((s) => (
+          <option key={s.status} value={s.status}>
+            {s.status}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

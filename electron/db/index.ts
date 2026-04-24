@@ -71,6 +71,15 @@ const DEFAULT_SETTINGS: Settings = {
   layout: { leftPct: 40, midPct: 40 },
   themeId: 'default',
   themeMode: 'dark',
+  taskStatusGroupOrder: {},
+  collapsedStatusGroups: [],
+  taskFilters: {
+    statuses: [],
+    listNames: [],
+    priorities: [],
+    dueFrom: null,
+    dueTo: null,
+  },
 };
 
 export function initDb(): Database.Database {
@@ -161,6 +170,36 @@ export function getSettings(): Settings {
   const themeMode: Settings['themeMode'] =
     storedThemeMode === 'light' ? 'light' : storedThemeMode === 'dark' ? 'dark' : migratedMode;
 
+  const taskStatusGroupOrder = parseJsonShape<Settings['taskStatusGroupOrder']>(
+    stored['taskStatusGroupOrder'],
+    (v) =>
+      !!v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      Object.values(v).every(
+        (arr) => Array.isArray(arr) && arr.every((s) => typeof s === 'string')
+      ),
+    DEFAULT_SETTINGS.taskStatusGroupOrder
+  );
+
+  const collapsedStatusGroups = parseJsonShape<string[]>(
+    stored['collapsedStatusGroups'],
+    (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
+    DEFAULT_SETTINGS.collapsedStatusGroups
+  );
+
+  const taskFilters = parseJsonShape<Settings['taskFilters']>(
+    stored['taskFilters'],
+    (v) =>
+      !!v &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      Array.isArray((v as Settings['taskFilters']).statuses) &&
+      Array.isArray((v as Settings['taskFilters']).listNames) &&
+      Array.isArray((v as Settings['taskFilters']).priorities),
+    DEFAULT_SETTINGS.taskFilters
+  );
+
   return {
     timezone: stored['timezone'] || DEFAULT_SETTINGS.timezone,
     clickupWorkspaceId: stored['clickupWorkspaceId'] || null,
@@ -175,7 +214,24 @@ export function getSettings(): Settings {
     layout,
     themeId,
     themeMode,
+    taskStatusGroupOrder,
+    collapsedStatusGroups,
+    taskFilters,
   };
+}
+
+function parseJsonShape<T>(
+  raw: string | undefined,
+  isValid: (v: unknown) => boolean,
+  fallback: T
+): T {
+  if (!raw) return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return isValid(parsed) ? (parsed as T) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 export function saveSettings(patch: Partial<Settings>): Settings {

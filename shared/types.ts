@@ -320,6 +320,14 @@ export const THEMES: ThemeInfo[] = [
   },
 ];
 
+export interface TaskFiltersState {
+  statuses: string[];
+  listNames: string[];
+  priorities: number[]; // 1 | 2 | 3 | 4
+  dueFrom: number | null; // unix ms
+  dueTo: number | null;
+}
+
 export interface Settings {
   timezone: string; // IANA, default America/New_York
   clickupWorkspaceId: string | null;
@@ -334,6 +342,20 @@ export interface Settings {
   layout: LayoutState;
   themeId: ThemeId;
   themeMode: ThemeMode;
+  // User-customized order of status groups in TaskList. Keyed by a list scope
+  // identifier ('__all__' for the cross-list default view). Unknown statuses
+  // fall back to ClickUp's orderindex.
+  taskStatusGroupOrder: Record<string, string[]>;
+  // Status group names the user has collapsed in TaskList.
+  collapsedStatusGroups: string[];
+  // Last-used filter state in TaskList; persists across restarts.
+  taskFilters: TaskFiltersState;
+}
+
+export interface ListStatus {
+  status: string;
+  color: string;
+  orderindex: number;
 }
 
 export interface DescriptionPromptPayload {
@@ -358,6 +380,7 @@ export interface HelmApi {
   // clickup
   listTasks: () => Promise<Task[]>;
   getTask: (taskId: string) => Promise<TaskDetail>;
+  getListStatuses: (listId: string) => Promise<ListStatus[]>;
   updateTask: (
     taskId: string,
     patch: Partial<Pick<Task, 'name' | 'description' | 'status' | 'priority' | 'dueDate'>>
