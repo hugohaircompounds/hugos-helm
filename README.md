@@ -68,7 +68,7 @@ Vite runs on `http://localhost:5173` and Electron opens once it's up.
 
 ### Publishing a new release
 
-The release loop (version bump → build → publish to GitHub → auto-update rolls out to all installed copies) is documented in [RELEASE.md](./RELEASE.md).
+The release loop (version bump → build → publish to GitHub → auto-update rolls out to all installed copies) is documented in [docs/releases/WORKFLOW.md](./docs/releases/WORKFLOW.md). Per-version planning docs live alongside it as `docs/releases/X.Y.Z.md`.
 
 ## Layout
 
