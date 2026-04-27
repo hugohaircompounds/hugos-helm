@@ -16,6 +16,7 @@ import * as gcal from '../services/gcal';
 import * as gmail from '../services/gmail';
 import * as auth from '../services/auth';
 import {
+  setRunningDescription,
   startTimer as timerStart,
   stopTimer as timerStop,
   syncFromRemote as timerSyncFromRemote,
@@ -121,6 +122,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     pendingPrompt = null;
   });
 
+  ipcMain.handle('timer:setRunningDescription', (_e, text: string) => {
+    setRunningDescription(typeof text === 'string' ? text : '');
+  });
+
   // Relay timer + prompt events to the renderer.
   timerBus.on('change', (state) => {
     const w = getWindow();
@@ -132,5 +137,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const w = getWindow();
     if (!w || w.isDestroyed()) return;
     w.webContents.send('helm:description-prompt', payload);
+  });
+  timerBus.on('eod-focus-entry', (payload) => {
+    const w = getWindow();
+    if (!w || w.isDestroyed()) return;
+    w.webContents.send('helm:eod-focus-entry', payload);
   });
 }

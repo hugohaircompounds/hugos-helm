@@ -1,16 +1,14 @@
 // Job definitions. Each job is a pure function taking the current Date
 // (for logging) and effecting state through the timer service + db.
 
+import { BrowserWindow, Notification } from 'electron';
 import type { JobName } from '../../shared/types';
 import {
-  getCachedTask,
   getSettings,
   getTimerState,
   logJob,
 } from '../db';
-import * as clickup from '../services/clickup';
 import { pauseForLater, resumePaused, startTimer, stopTimer, timerBus } from './timer';
-import type { DescriptionPromptPayload } from '../../shared/types';
 
 const STANDUP_MAX_MS = 20 * 60 * 1000;
 
@@ -116,22 +114,42 @@ export const jobs: CronDef[] = [
     run: async () => {
       try {
         const state = getTimerState();
-        // Gather today's task titles from ClickUp so the modal can pre-fill.
-        const entries = await clickup.listTimeEntries('today').catch(() => []);
-        const titles = Array.from(
-          new Set(
-            entries.map((e) => e.taskName || getCachedTask(e.taskId || '')?.name || '').filter(Boolean)
-          )
-        );
-        const payload: DescriptionPromptPayload = {
-          kind: 'eod',
+        if (!state.running) {
+          logJob('eod-prompt', 'skipped', 'no timer running');
+          return;
+        }
+
+        // Tell the renderer to switch to Timesheet and open the running
+        // entry's editor so the user can type a description before the
+        // 16:59 auto-stop flushes it via stopTimer().
+        timerBus.emit('eod-focus-entry', {
           entryId: state.entryId,
           taskId: state.taskId,
-          defaultText: titles.join('\n'),
-          taskTitles: titles,
-        };
-        timerBus.emit('description-prompt', payload);
-        logJob('eod-prompt', 'ok', `titles: ${titles.length}`);
+        });
+
+        // OS-level reminder for when the window is unfocused or hidden.
+        if (Notification.isSupported()) {
+          const notif = new Notification({
+            title: 'Helm — write your EOD description',
+            body: state.taskName
+              ? `Add a note for "${state.taskName}" before 4:59 PM stop.`
+              : 'Add a note for the current task before 4:59 PM stop.',
+          });
+          notif.on('click', () => {
+            const win = BrowserWindow.getAllWindows()[0];
+            if (!win) return;
+            if (win.isMinimized()) win.restore();
+            win.show();
+            win.focus();
+          });
+          notif.show();
+        }
+
+        logJob(
+          'eod-prompt',
+          'ok',
+          `focus emitted for "${state.taskName || state.taskId}"`
+        );
       } catch (e) {
         logJob('eod-prompt', 'error', (e as Error).message);
       }

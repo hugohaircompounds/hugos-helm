@@ -83,6 +83,11 @@ function setupAutoUpdater(): void {
 }
 
 app.whenReady().then(() => {
+  // Required on Windows for native Notifications to render with the right
+  // identity. Must match electron-builder's appId.
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.alon.helm');
+  }
   initDb();
   registerIpc(getWindow);
   createWindow();

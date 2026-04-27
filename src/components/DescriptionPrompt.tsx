@@ -14,8 +14,9 @@ export function DescriptionPrompt({ payload, onClose }: Props) {
   }, [payload]);
 
   if (!payload) return null;
-
-  const isEod = payload.kind === 'eod';
+  // EOD now flows through the Timesheet inline editor (see eod-focus-entry).
+  // The modal is reserved for manual stops.
+  if (payload.kind === 'eod') return null;
 
   async function submit() {
     await window.helm.submitDescriptionPrompt(payload!.entryId, text);
@@ -31,14 +32,7 @@ export function DescriptionPrompt({ payload, onClose }: Props) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
       <div className="w-[560px] bg-panel border border-border rounded-lg shadow-xl">
         <header className="px-5 py-4 border-b border-border">
-          <h3 className="text-ink font-medium">
-            {isEod ? "What did you work on today?" : 'Describe this time entry'}
-          </h3>
-          {isEod && payload.taskTitles.length > 0 && (
-            <p className="text-xs text-inkMuted mt-1">
-              Pre-filled with tasks you worked on today.
-            </p>
-          )}
+          <h3 className="text-ink font-medium">Describe this time entry</h3>
         </header>
         <div className="p-5">
           <textarea

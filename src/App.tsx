@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DescriptionPromptPayload } from '../shared/types';
 import { useClickUp } from './hooks/useClickUp';
 import { useTimer } from './hooks/useTimer';
@@ -19,6 +19,7 @@ import { TimeEntryDetail } from './components/TimeEntryDetail';
 import { DescriptionPrompt } from './components/DescriptionPrompt';
 import { Settings } from './components/Settings';
 import { ResizableColumns } from './components/ResizableColumns';
+import { isRunningId, mergeRunningEntry, runningIdFor } from './utils/runningEntry';
 
 type Tab = 'tasks' | 'timesheet' | 'settings';
 
@@ -37,12 +38,65 @@ export default function App() {
   const timesheet = useTimeEntries(timesheetRange);
   const [prompt, setPrompt] = useState<DescriptionPromptPayload | null>(null);
 
+  // Merge the synthetic running entry into the timesheet so the active timer
+  // shows up in the list and on the TimelineBar. Recomputes each render so the
+  // synthetic duration tracks with useTimer's tick.
+  const mergedEntries = useMemo(
+    () => mergeRunningEntry(timesheet.entries, timer, Date.now()),
+    // elapsedMs intentionally drives the recompute so the duration ticks live.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timesheet.entries, timer, elapsedMs]
+  );
+
   const selectedEntry = selectedEntryId
-    ? timesheet.entries.find((e) => e.id === selectedEntryId) || null
+    ? mergedEntries.find((e) => e.id === selectedEntryId) || null
     : null;
+
+  // When the timer stops, reload entries so ClickUp's just-persisted real
+  // entry replaces the synthetic. If the user was viewing the synthetic,
+  // capture the running task so we can re-select the real entry once it
+  // appears in the next entries refresh.
+  const prevRunning = useRef(timer.running);
+  const pendingReselectTaskId = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevRunning.current && !timer.running) {
+      if (selectedEntryId && isRunningId(selectedEntryId)) {
+        pendingReselectTaskId.current =
+          selectedEntryId.slice(runningIdFor('').length) || null;
+      }
+      timesheet.load();
+    }
+    prevRunning.current = timer.running;
+  }, [timer.running, selectedEntryId, timesheet]);
+
+  // After a stop-driven reload, find the matching real entry by taskId and
+  // select it so the user keeps viewing what they were just working on.
+  useEffect(() => {
+    if (!pendingReselectTaskId.current) return;
+    const target = timesheet.entries.find(
+      (e) => e.taskId === pendingReselectTaskId.current
+    );
+    if (target) {
+      setSelectedEntryId(target.id);
+      pendingReselectTaskId.current = null;
+    }
+  }, [timesheet.entries]);
 
   useEffect(() => {
     return window.helm.onDescriptionPrompt(setPrompt);
+  }, []);
+
+  // Auto-focus signal that bumps when the EOD scheduler tells us to focus the
+  // running entry's description. Bumping a counter (instead of a boolean) lets
+  // the same effect re-fire if EOD somehow triggers twice in one session.
+  const [eodFocusTick, setEodFocusTick] = useState(0);
+  useEffect(() => {
+    return window.helm.onEodFocusEntry((payload) => {
+      if (!payload.taskId) return;
+      setTab('timesheet');
+      setSelectedEntryId(runningIdFor(payload.taskId));
+      setEodFocusTick((n) => n + 1);
+    });
   }, []);
 
   return (
@@ -90,7 +144,7 @@ export default function App() {
             )}
             {tab === 'timesheet' && (
               <TimesheetEditor
-                entries={timesheet.entries}
+                entries={mergedEntries}
                 loading={timesheet.loading}
                 error={timesheet.error}
                 range={timesheetRange}
@@ -119,6 +173,7 @@ export default function App() {
                 onSave={timesheet.save}
                 onDelete={timesheet.remove}
                 onClose={() => setSelectedEntryId(null)}
+                focusDescriptionTick={eodFocusTick}
               />
             )}
             {tab === 'settings' && (

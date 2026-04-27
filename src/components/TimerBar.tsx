@@ -36,32 +36,37 @@ export function TimerBar({ state, elapsedMs, onStop, lexicon }: Props) {
     return (
       <div
         data-slot="timer-bar"
-        className="relative h-14 flex items-center justify-between px-4 bg-panel border-b border-border"
+        className="relative h-16 grid grid-cols-[1fr_auto_1fr] items-center px-4 bg-panel border-b border-border"
       >
-        <div className="flex items-center gap-3 text-inkMuted">
+        <div className="flex items-center gap-3 text-inkMuted min-w-0">
           <span data-slot="timer-indicator" data-state="idle" />
-          <div>
-            <div data-slot="timer-label">{lexicon.currentTaskLabel}</div>
-            <div data-slot="timer-task" className="text-ink/80">
-              {lexicon.noTimerLabel}
-            </div>
-          </div>
           <button
             onClick={fetchFromClickUp}
             disabled={syncing}
             title="Pull the current timer from ClickUp"
-            className="ml-2 px-2 py-0.5 rounded text-xs border border-border text-inkMuted hover:text-ink hover:bg-panelHi disabled:opacity-50"
+            className="px-2 py-0.5 rounded text-xs border border-border text-inkMuted hover:text-ink hover:bg-panelHi disabled:opacity-50"
           >
             {syncing ? 'Fetching…' : `Fetch from ClickUp`}
           </button>
           {state.resumeTaskName && (
-            <span className="text-warn ml-3 text-xs">
+            <span className="text-warn text-xs truncate">
               Paused: <span className="text-ink">{state.resumeTaskName}</span>
             </span>
           )}
-          {syncError && <span className="text-danger text-xs ml-2">{syncError}</span>}
+          {syncError && <span className="text-danger text-xs truncate">{syncError}</span>}
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="text-center min-w-0">
+          <div data-slot="timer-label">{lexicon.currentTaskLabel}</div>
+          <div
+            data-slot="timer-task"
+            className="text-inkMuted text-lg font-medium truncate"
+          >
+            {lexicon.noTimerLabel}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3">
           <div className="text-right">
             <div data-slot="timer-label">{lexicon.elapsedLabel}</div>
             <div data-slot="timer-clock" className="text-inkMuted">
@@ -76,26 +81,36 @@ export function TimerBar({ state, elapsedMs, onStop, lexicon }: Props) {
   return (
     <div
       data-slot="timer-bar"
-      className="relative h-14 flex items-center justify-between px-4 bg-panel border-b border-border"
+      className="relative h-16 grid grid-cols-[1fr_auto_1fr] items-center px-4 bg-panel border-b border-border"
     >
-      <div data-slot="timer-actions" className="flex items-center gap-3">
+      <div data-slot="timer-actions" className="flex items-center gap-3 min-w-0">
         <span data-slot="timer-indicator" data-state="running" />
-        <div className="min-w-0">
-          <div data-slot="timer-label">{lexicon.currentTaskLabel}</div>
-          <div data-slot="timer-task" className="text-ink font-medium truncate max-w-xl">
-            {state.taskName || state.taskId}
-          </div>
-        </div>
         <button
           onClick={fetchFromClickUp}
           disabled={syncing}
           title="Re-sync the timer with ClickUp"
-          className="ml-2 px-2 py-0.5 rounded text-xs border border-border text-inkMuted hover:text-ink hover:bg-panelHi disabled:opacity-50"
+          className="px-2 py-0.5 rounded text-xs border border-border text-inkMuted hover:text-ink hover:bg-panelHi disabled:opacity-50"
         >
           {syncing ? '…' : lexicon.syncVerb}
         </button>
+        {state.resumeTaskName && (
+          <span className="text-warn text-xs truncate">
+            Paused: <span className="text-ink">{state.resumeTaskName}</span>
+          </span>
+        )}
       </div>
-      <div className="flex items-center gap-4">
+
+      <div className="text-center min-w-0 px-4">
+        <div data-slot="timer-label">{lexicon.currentTaskLabel}</div>
+        <div
+          data-slot="timer-task"
+          className="text-ink text-lg font-semibold truncate"
+        >
+          {state.taskName || state.taskId}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-4">
         <div className="text-right">
           <div data-slot="timer-label">{lexicon.elapsedLabel}</div>
           <div data-slot="timer-clock" className="text-ink">

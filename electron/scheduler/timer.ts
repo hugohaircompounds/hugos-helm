@@ -5,7 +5,11 @@
 // below so state + audit logging stay consistent.
 
 import { EventEmitter } from 'node:events';
-import type { DescriptionPromptPayload, TimerState } from '../../shared/types';
+import type {
+  DescriptionPromptPayload,
+  EodFocusEntryPayload,
+  TimerState,
+} from '../../shared/types';
 import {
   getCachedTask,
   getSettings,
@@ -19,13 +23,29 @@ import * as clickup from '../services/clickup';
 export interface TimerBus {
   on(event: 'change', cb: (state: TimerState) => void): void;
   on(event: 'description-prompt', cb: (payload: DescriptionPromptPayload) => void): void;
+  on(event: 'eod-focus-entry', cb: (payload: EodFocusEntryPayload) => void): void;
   off(event: 'change', cb: (state: TimerState) => void): void;
   off(event: 'description-prompt', cb: (payload: DescriptionPromptPayload) => void): void;
+  off(event: 'eod-focus-entry', cb: (payload: EodFocusEntryPayload) => void): void;
   emit(event: 'change', state: TimerState): void;
   emit(event: 'description-prompt', payload: DescriptionPromptPayload): void;
+  emit(event: 'eod-focus-entry', payload: EodFocusEntryPayload): void;
 }
 
 export const timerBus: TimerBus = new EventEmitter();
+
+// Description the user is typing into the Timesheet editor for the running
+// timer. Held in memory and flushed via clickup.updateTimeEntry() when the
+// timer stops, so a scheduler-driven EOD stop captures whatever was typed.
+let pendingRunningDescription = '';
+
+export function setRunningDescription(text: string): void {
+  pendingRunningDescription = text;
+}
+
+export function getRunningDescription(): string {
+  return pendingRunningDescription;
+}
 
 function emitChange(state: TimerState): void {
   timerBus.emit('change', state);
@@ -58,6 +78,9 @@ export async function startTimer(taskId: string, opts: StartOpts = {}): Promise<
 
   const entry = await clickup.startTimer(taskId);
   const cached = getCachedTask(taskId);
+  // Fresh task starts with an empty description buffer so we don't carry
+  // over text from a previous timer.
+  pendingRunningDescription = '';
   const next: TimerState = {
     running: true,
     taskId,
@@ -91,6 +114,19 @@ export async function stopTimer(opts: StopOpts = {}): Promise<TimerState> {
   const stoppedTaskId = prev.taskId;
   const stoppedTaskName = prev.taskName;
   const entryId = stoppedEntry?.id || prev.entryId;
+
+  // Flush any description the renderer buffered for the running entry. The
+  // ClickUp stop endpoint doesn't accept a description, so update separately.
+  // Best-effort: errors are logged but don't block the stop.
+  const buffered = pendingRunningDescription;
+  pendingRunningDescription = '';
+  if (buffered.trim() && entryId) {
+    try {
+      await clickup.updateTimeEntry(entryId, { description: buffered });
+    } catch (e) {
+      logJob('eod-stop', 'error', `description flush failed: ${(e as Error).message}`);
+    }
+  }
 
   const settings = getSettings();
   const standupIds = [settings.standupTaskIdMon, settings.standupTaskIdTueThu].filter(

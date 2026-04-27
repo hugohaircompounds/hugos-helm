@@ -366,6 +366,11 @@ export interface DescriptionPromptPayload {
   taskTitles: string[]; // for EOD only
 }
 
+export interface EodFocusEntryPayload {
+  entryId: string | null;
+  taskId: string | null;
+}
+
 // IPC channel contract — the renderer's preload-exposed API shape.
 export interface HelmApi {
   // settings
@@ -405,10 +410,15 @@ export interface HelmApi {
   listJobLogs: (limit?: number) => Promise<JobLog[]>;
   submitDescriptionPrompt: (entryId: string | null, text: string) => Promise<void>;
   dismissDescriptionPrompt: () => Promise<void>;
+  // Buffer the description the user is typing for the running timer; flushed
+  // by stopTimer() when the timer stops (manual or scheduler-driven). Pass
+  // empty string to clear.
+  setRunningDescription: (text: string) => Promise<void>;
 
   // events (renderer subscribes to main)
   onTimerChanged: (cb: (state: TimerState) => void) => () => void;
   onDescriptionPrompt: (cb: (payload: DescriptionPromptPayload) => void) => () => void;
+  onEodFocusEntry: (cb: (payload: EodFocusEntryPayload) => void) => () => void;
   onJobFired: (cb: (log: JobLog) => void) => () => void;
 }
 

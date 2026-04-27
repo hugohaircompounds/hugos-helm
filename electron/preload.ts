@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type {
   DescriptionPromptPayload,
+  EodFocusEntryPayload,
   HelmApi,
   JobLog,
   TimerState,
@@ -39,6 +40,8 @@ const api: HelmApi = {
   submitDescriptionPrompt: (entryId, text) =>
     ipcRenderer.invoke('prompt:submit', entryId, text),
   dismissDescriptionPrompt: () => ipcRenderer.invoke('prompt:dismiss'),
+  setRunningDescription: (text) =>
+    ipcRenderer.invoke('timer:setRunningDescription', text),
 
   onTimerChanged: (cb) => {
     const h = (_e: unknown, state: TimerState) => cb(state);
@@ -49,6 +52,11 @@ const api: HelmApi = {
     const h = (_e: unknown, payload: DescriptionPromptPayload) => cb(payload);
     ipcRenderer.on('helm:description-prompt', h);
     return () => ipcRenderer.removeListener('helm:description-prompt', h);
+  },
+  onEodFocusEntry: (cb) => {
+    const h = (_e: unknown, payload: EodFocusEntryPayload) => cb(payload);
+    ipcRenderer.on('helm:eod-focus-entry', h);
+    return () => ipcRenderer.removeListener('helm:eod-focus-entry', h);
   },
   onJobFired: (cb) => {
     const h = (_e: unknown, log: JobLog) => cb(log);
