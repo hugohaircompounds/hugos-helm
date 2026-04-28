@@ -21,6 +21,7 @@ import {
   stopTimer as timerStop,
   syncFromRemote as timerSyncFromRemote,
   timerBus,
+  truncateRunningEntry,
 } from '../scheduler/timer';
 import { restartScheduler } from '../scheduler';
 
@@ -71,6 +72,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     'clickup:updateTask',
     (_e, id: string, patch: Partial<Task>) => clickup.updateTask(id, patch)
   );
+  ipcMain.handle('clickup:listSpaces', () => clickup.listSpaces());
   ipcMain.handle('clickup:getListStatuses', (_e, listId: string) =>
     clickup.getListStatuses(listId)
   );
@@ -138,6 +140,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     setRunningDescription(typeof text === 'string' ? text : '');
   });
 
+  ipcMain.handle('timer:truncateRunningEntry', async (_e, at: number) => {
+    if (!Number.isFinite(at)) return;
+    await truncateRunningEntry(at);
+  });
+
   // Relay timer + prompt events to the renderer.
   timerBus.on('change', (state) => {
     const w = getWindow();
@@ -154,5 +161,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const w = getWindow();
     if (!w || w.isDestroyed()) return;
     w.webContents.send('helm:eod-focus-entry', payload);
+  });
+  timerBus.on('idle-truncate-prompt', (payload) => {
+    const w = getWindow();
+    if (!w || w.isDestroyed()) return;
+    w.webContents.send('helm:idle-truncate-prompt', payload);
   });
 }

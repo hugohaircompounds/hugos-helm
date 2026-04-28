@@ -1,4 +1,5 @@
 import type {
+  ClickUpSpace,
   Comment,
   ListStatus,
   Priority,
@@ -86,6 +87,7 @@ interface CUTask {
   url: string;
   parent: string | null;
   list?: { id: string; name: string };
+  assignees?: { id: number }[];
 }
 
 const PRIORITY_MAP: Record<string, Priority> = {
@@ -112,33 +114,96 @@ function normalizeTask(t: CUTask): Task {
   };
 }
 
-export async function getAssignedTasks(): Promise<Task[]> {
-  const { workspaceId, userId } = await ensureWorkspace();
-  // ClickUp wants array-style query params (assignees[]=..., not assignees=...).
-  const baseParams = new URLSearchParams({
+interface TasksResp {
+  tasks: CUTask[];
+  last_page?: boolean;
+}
+
+// Run a paginated /team/{id}/task query with the given filter params and
+// return all matching CUTask rows. Caller is responsible for normalizing.
+async function fetchTasksWithFilters(
+  workspaceId: string,
+  filter: { assigneeId?: string; spaceIds?: string[] }
+): Promise<CUTask[]> {
+  // Note on `subtasks`: leaving this OFF. ClickUp's API is significantly
+  // slower with subtasks=true (scans subtask trees across the workspace).
+  // We accept that subtasks won't appear as top-level TaskList rows;
+  // their time still rolls up to parents via Bugfix B (subtask attribution
+  // walk in App.tsx taskTotals) and timers are typically started on the
+  // parent anyway. If a subtask must be visible, drag it to a configured
+  // space instead.
+  const params = new URLSearchParams({
     include_closed: 'false',
-    subtasks: 'true',
     order_by: 'updated',
     reverse: 'true',
   });
-  baseParams.append('assignees[]', userId);
-  interface Resp {
-    tasks: CUTask[];
-    last_page?: boolean;
+  if (filter.assigneeId) params.append('assignees[]', filter.assigneeId);
+  if (filter.spaceIds) {
+    for (const id of filter.spaceIds) params.append('space_ids[]', id);
   }
   const all: CUTask[] = [];
   let page = 0;
   while (true) {
-    baseParams.set('page', String(page));
-    const { tasks, last_page } = await cu<Resp>(
-      `/team/${workspaceId}/task?${baseParams.toString()}`
+    params.set('page', String(page));
+    const { tasks, last_page } = await cu<TasksResp>(
+      `/team/${workspaceId}/task?${params.toString()}`
     );
     all.push(...tasks);
     if (last_page || tasks.length === 0) break;
     page++;
     if (page > 10) break; // hard safety
   }
-  const normalized = all.map(normalizeTask);
+  return all;
+}
+
+export async function getAssignedTasks(): Promise<Task[]> {
+  const t0 = Date.now();
+  const { workspaceId, userId } = await ensureWorkspace();
+  const settings = getSettings();
+
+  // Assignee-filter path. Skipped when `assigneeFilterEnabled` is false —
+  // useful when the assignee query is slow on ClickUp's side and the user
+  // routes work through a designated space instead (e.g. Hugo's Laboratory).
+  let assigned: CUTask[] = [];
+  let assignedDur = 0;
+  if (settings.assigneeFilterEnabled) {
+    const tA = Date.now();
+    const assignedRaw = await fetchTasksWithFilters(workspaceId, { assigneeId: userId });
+    // Belt-and-suspenders: ClickUp's `assignees[]` filter can leak in tasks
+    // the user isn't actually assigned to (e.g. via list membership /
+    // permissions). Filter client-side against the explicit assignees array.
+    assigned = assignedRaw.filter((t) =>
+      (t.assignees || []).some((a) => String(a.id) === userId)
+    );
+    assignedDur = Date.now() - tA;
+  }
+  const assignedIds = new Set(assigned.map((t) => t.id));
+
+  // Extra-space path: pull tasks from configured spaces regardless of
+  // assignee. When the assignee path is disabled this is the only source.
+  let fromSpaces: CUTask[] = [];
+  let spaceDur = 0;
+  if (settings.extraTaskSpaceIds.length > 0) {
+    const tS = Date.now();
+    fromSpaces = await fetchTasksWithFilters(workspaceId, {
+      spaceIds: settings.extraTaskSpaceIds,
+    });
+    spaceDur = Date.now() - tS;
+  }
+
+  const normalized: Task[] = assigned.map(normalizeTask);
+  for (const t of fromSpaces) {
+    if (assignedIds.has(t.id)) continue;
+    // viaSpace flag only meaningful when the assignee path also ran.
+    const viaSpace = settings.assigneeFilterEnabled;
+    normalized.push({ ...normalizeTask(t), viaSpace: viaSpace || undefined });
+  }
+
+  console.log(
+    `[getAssignedTasks] ${normalized.length} tasks in ${Date.now() - t0}ms ` +
+      `(assignee path ${assignedDur}ms, space path ${spaceDur}ms)`
+  );
+
   upsertCachedTasks(
     normalized.map((t) => ({
       id: t.id,
@@ -153,6 +218,15 @@ export async function getAssignedTasks(): Promise<Task[]> {
     }))
   );
   return normalized;
+}
+
+export async function listSpaces(): Promise<ClickUpSpace[]> {
+  const { workspaceId } = await ensureWorkspace();
+  interface Resp {
+    spaces: { id: string; name: string }[];
+  }
+  const resp = await cu<Resp>(`/team/${workspaceId}/space?archived=false`);
+  return resp.spaces.map((s) => ({ id: s.id, name: s.name }));
 }
 
 export async function getTaskDetail(taskId: string): Promise<TaskDetail> {

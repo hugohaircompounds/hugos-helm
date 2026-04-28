@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Priority,
+  StatusEquivalence,
   Task,
   TaskFiltersState,
   ThemeLexicon,
@@ -78,27 +79,38 @@ export function TaskList({
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [filters, setFilters] = useState<TaskFiltersState>(EMPTY_FILTERS);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [equivalences, setEquivalences] = useState<StatusEquivalence[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load persisted prefs once.
+  // Load persisted prefs once. Re-poll on a coarse interval so changes made
+  // in the Settings panel (equivalences, pins) propagate without a restart.
+  // Each setter uses the functional updater form to compare against the
+  // latest state — same array reference is returned on no-change, so React
+  // skips the re-render. Without this, polling churned references and the
+  // useMemos downstream all rebuilt every 5s — visible as a tab-switch delay.
   useEffect(() => {
-    window.helm
-      .getSettings()
-      .then((s) => {
-        setGroupOrder(s.taskStatusGroupOrder?.[SCOPE] || []);
-        setCollapsed(s.collapsedStatusGroups || []);
-        setFilters({
+    const stable = <T,>(prev: T, next: T): T =>
+      JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+    const apply = (s: Awaited<ReturnType<typeof window.helm.getSettings>>) => {
+      setGroupOrder((prev) => stable(prev, s.taskStatusGroupOrder?.[SCOPE] || []));
+      setCollapsed((prev) => stable(prev, s.collapsedStatusGroups || []));
+      setFilters((prev) =>
+        stable(prev, {
           statuses: s.taskFilters?.statuses || [],
           listNames: s.taskFilters?.listNames || [],
           priorities: s.taskFilters?.priorities || [],
           dueFrom: s.taskFilters?.dueFrom ?? null,
           dueTo: s.taskFilters?.dueTo ?? null,
-        });
-        setPinnedIds(s.pinnedTaskIds || []);
-      })
-      .catch(() => {
-        /* keep defaults */
-      });
+        })
+      );
+      setPinnedIds((prev) => stable(prev, s.pinnedTaskIds || []));
+      setEquivalences((prev) => stable(prev, s.statusEquivalences || []));
+    };
+    window.helm.getSettings().then(apply).catch(() => {});
+    const id = window.setInterval(() => {
+      window.helm.getSettings().then(apply).catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(id);
   }, []);
 
   // Debounced save wrapper. Coalesces rapid reorders/collapses/pins into one write.
@@ -149,12 +161,28 @@ export function TaskList({
     return list;
   }, [filtered, pinnedIds]);
 
+  // Build a lookup from raw ClickUp status → display group + override color
+  // based on user-configured equivalences. Tasks whose raw status is a member
+  // of an equivalence get bucketed under the display group instead.
+  const equivLookup = useMemo(() => {
+    const map = new Map<string, { groupName: string; color?: string }>();
+    for (const eq of equivalences) {
+      for (const m of eq.members) {
+        map.set(m, { groupName: eq.groupName, color: eq.color });
+      }
+    }
+    return map;
+  }, [equivalences]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, { color: string | null; tasks: Task[] }>();
     for (const t of filtered) {
       if (pinnedSet.has(t.id)) continue;
-      const key = t.status || 'open';
-      const g = map.get(key) || { color: t.statusColor, tasks: [] };
+      const rawStatus = t.status || 'open';
+      const equiv = equivLookup.get(rawStatus);
+      const key = equiv?.groupName ?? rawStatus;
+      const color = equiv?.color ?? t.statusColor;
+      const g = map.get(key) || { color, tasks: [] };
       g.tasks.push(t);
       map.set(key, g);
     }
@@ -169,7 +197,7 @@ export function TaskList({
     }
     const unknown = all.filter(([k]) => !knownSet.has(k));
     return [...known, ...unknown];
-  }, [filtered, groupOrder, pinnedSet]);
+  }, [filtered, groupOrder, pinnedSet, equivLookup]);
 
   const total = tasks.length;
   const filteredCount = filtered.length;
@@ -276,6 +304,11 @@ export function TaskList({
                 </span>
               );
             })()}
+            {t.viaSpace && (
+              <span data-slot="task-pill" data-kind="lab" title="From an extra task space — you're not directly assigned">
+                Lab
+              </span>
+            )}
             {t.priority && (
               <span data-slot="task-pill" data-priority={prioKey}>
                 {PRIORITY_LABEL[t.priority]}

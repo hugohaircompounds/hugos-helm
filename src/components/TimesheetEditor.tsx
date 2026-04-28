@@ -15,6 +15,8 @@ interface Props {
   selectedEntryId: string | null;
   onSelectEntry: (id: string | null) => void;
   onNewEntry: () => void;
+  workHoursStart?: number;
+  workHoursEnd?: number;
 }
 
 interface DayGroup {
@@ -95,6 +97,8 @@ export function TimesheetEditor({
   selectedEntryId,
   onSelectEntry,
   onNewEntry,
+  workHoursStart,
+  workHoursEnd,
 }: Props) {
   const total = entries.reduce((a, e) => a + (e.duration || 0), 0);
   const days = useMemo(() => groupByDay(entries), [entries]);
@@ -145,6 +149,8 @@ export function TimesheetEditor({
               selectedEntryId={selectedEntryId}
               onSelect={onSelectEntry}
               dayStart={g.dayStart}
+              workHoursStart={workHoursStart}
+              workHoursEnd={workHoursEnd}
             />
             <ul className="p-2 flex flex-col gap-1">
               {g.entries.map((e) => (

@@ -3,6 +3,7 @@ import type {
   DescriptionPromptPayload,
   EodFocusEntryPayload,
   HelmApi,
+  IdleTruncatePromptPayload,
   JobLog,
   TimerState,
 } from '../shared/types';
@@ -20,12 +21,14 @@ const api: HelmApi = {
   listTasks: () => ipcRenderer.invoke('clickup:listTasks'),
   getTask: (id) => ipcRenderer.invoke('clickup:getTask', id),
   updateTask: (id, patch) => ipcRenderer.invoke('clickup:updateTask', id, patch),
+  listSpaces: () => ipcRenderer.invoke('clickup:listSpaces'),
   getListStatuses: (listId) => ipcRenderer.invoke('clickup:getListStatuses', listId),
 
   startTimer: (id) => ipcRenderer.invoke('timer:start', id),
   stopTimer: (opts) => ipcRenderer.invoke('timer:stop', opts),
   getTimerState: () => ipcRenderer.invoke('timer:state'),
   syncTimerFromRemote: () => ipcRenderer.invoke('timer:syncFromRemote'),
+  truncateRunningEntry: (at) => ipcRenderer.invoke('timer:truncateRunningEntry', at),
 
   listTimeEntries: (range) => ipcRenderer.invoke('clickup:listTimeEntries', range),
   createTimeEntry: (opts) => ipcRenderer.invoke('clickup:createTimeEntry', opts),
@@ -58,6 +61,11 @@ const api: HelmApi = {
     const h = (_e: unknown, payload: EodFocusEntryPayload) => cb(payload);
     ipcRenderer.on('helm:eod-focus-entry', h);
     return () => ipcRenderer.removeListener('helm:eod-focus-entry', h);
+  },
+  onIdleTruncatePrompt: (cb) => {
+    const h = (_e: unknown, payload: IdleTruncatePromptPayload) => cb(payload);
+    ipcRenderer.on('helm:idle-truncate-prompt', h);
+    return () => ipcRenderer.removeListener('helm:idle-truncate-prompt', h);
   },
   onJobFired: (cb) => {
     const h = (_e: unknown, log: JobLog) => cb(log);

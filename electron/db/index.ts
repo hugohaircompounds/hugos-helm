@@ -81,6 +81,14 @@ const DEFAULT_SETTINGS: Settings = {
     dueTo: null,
   },
   pinnedTaskIds: [],
+  workHoursStart: 8 * 60,
+  workHoursEnd: 17 * 60,
+  extraTaskSpaceIds: [],
+  assigneeFilterEnabled: true,
+  statusEquivalences: [],
+  idleDetectionEnabled: true,
+  idleTimeoutMin: 10,
+  lockTriggersIdle: true,
 };
 
 export function initDb(): Database.Database {
@@ -207,6 +215,36 @@ export function getSettings(): Settings {
     DEFAULT_SETTINGS.pinnedTaskIds
   );
 
+  const parseMinutes = (raw: string | undefined, fallback: number): number => {
+    if (!raw) return fallback;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0 || n > 24 * 60) return fallback;
+    return n;
+  };
+  const workHoursStart = parseMinutes(stored['workHoursStart'], DEFAULT_SETTINGS.workHoursStart);
+  const workHoursEnd = parseMinutes(stored['workHoursEnd'], DEFAULT_SETTINGS.workHoursEnd);
+
+  const extraTaskSpaceIds = parseJsonShape<string[]>(
+    stored['extraTaskSpaceIds'],
+    (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
+    DEFAULT_SETTINGS.extraTaskSpaceIds
+  );
+
+  const statusEquivalences = parseJsonShape<Settings['statusEquivalences']>(
+    stored['statusEquivalences'],
+    (v) =>
+      Array.isArray(v) &&
+      v.every(
+        (eq) =>
+          eq &&
+          typeof eq === 'object' &&
+          typeof (eq as { groupName: unknown }).groupName === 'string' &&
+          Array.isArray((eq as { members: unknown }).members) &&
+          (eq as { members: unknown[] }).members.every((m) => typeof m === 'string')
+      ),
+    DEFAULT_SETTINGS.statusEquivalences
+  );
+
   return {
     timezone: stored['timezone'] || DEFAULT_SETTINGS.timezone,
     clickupWorkspaceId: stored['clickupWorkspaceId'] || null,
@@ -225,6 +263,32 @@ export function getSettings(): Settings {
     collapsedStatusGroups,
     taskFilters,
     pinnedTaskIds,
+    workHoursStart,
+    workHoursEnd,
+    extraTaskSpaceIds,
+    assigneeFilterEnabled:
+      stored['assigneeFilterEnabled'] === '0'
+        ? false
+        : stored['assigneeFilterEnabled'] === '1'
+        ? true
+        : DEFAULT_SETTINGS.assigneeFilterEnabled,
+    statusEquivalences,
+    idleDetectionEnabled:
+      stored['idleDetectionEnabled'] === '0'
+        ? false
+        : stored['idleDetectionEnabled'] === '1'
+        ? true
+        : DEFAULT_SETTINGS.idleDetectionEnabled,
+    idleTimeoutMin: parseMinutes(
+      stored['idleTimeoutMin'],
+      DEFAULT_SETTINGS.idleTimeoutMin
+    ),
+    lockTriggersIdle:
+      stored['lockTriggersIdle'] === '0'
+        ? false
+        : stored['lockTriggersIdle'] === '1'
+        ? true
+        : DEFAULT_SETTINGS.lockTriggersIdle,
   };
 }
 

@@ -8,6 +8,7 @@ import { EventEmitter } from 'node:events';
 import type {
   DescriptionPromptPayload,
   EodFocusEntryPayload,
+  IdleTruncatePromptPayload,
   TimerState,
 } from '../../shared/types';
 import {
@@ -24,12 +25,15 @@ export interface TimerBus {
   on(event: 'change', cb: (state: TimerState) => void): void;
   on(event: 'description-prompt', cb: (payload: DescriptionPromptPayload) => void): void;
   on(event: 'eod-focus-entry', cb: (payload: EodFocusEntryPayload) => void): void;
+  on(event: 'idle-truncate-prompt', cb: (payload: IdleTruncatePromptPayload) => void): void;
   off(event: 'change', cb: (state: TimerState) => void): void;
   off(event: 'description-prompt', cb: (payload: DescriptionPromptPayload) => void): void;
   off(event: 'eod-focus-entry', cb: (payload: EodFocusEntryPayload) => void): void;
+  off(event: 'idle-truncate-prompt', cb: (payload: IdleTruncatePromptPayload) => void): void;
   emit(event: 'change', state: TimerState): void;
   emit(event: 'description-prompt', payload: DescriptionPromptPayload): void;
   emit(event: 'eod-focus-entry', payload: EodFocusEntryPayload): void;
+  emit(event: 'idle-truncate-prompt', payload: IdleTruncatePromptPayload): void;
 }
 
 export const timerBus: TimerBus = new EventEmitter();
@@ -290,4 +294,29 @@ export async function resumePaused(): Promise<TimerState> {
   saveTimerState(next);
   emitChange(next);
   return next;
+}
+
+/**
+ * Stop the running timer and retroactively rewrite its end timestamp to `at`
+ * (and recompute duration). Used by the idle-truncate flow when the user
+ * was locked or away from their machine while a timer was running. No
+ * description prompt, no auto-resume — this is a "I wasn't actually
+ * working" correction, not a normal stop.
+ */
+export async function truncateRunningEntry(at: number): Promise<void> {
+  const prev = getTimerState();
+  if (!prev.running || !prev.startedAt || prev.startedAt >= at) {
+    return;
+  }
+  const entryId = prev.entryId;
+  await stopTimer({ silent: true, skipAutoResume: true });
+  if (!entryId) return;
+  try {
+    await clickup.updateTimeEntry(entryId, {
+      end: at,
+      duration: at - prev.startedAt,
+    });
+  } catch (e) {
+    logJob('idle-truncate', 'error', (e as Error).message);
+  }
 }

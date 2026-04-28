@@ -11,6 +11,12 @@ interface Props {
   // existing call sites keep working. Pass an earlier dayStart to render a
   // past day's bar in the week view.
   dayStart?: number;
+  // Local-time work-hour bounds in minutes from midnight. When provided,
+  // diagonal stripes render across any minute inside [start, end) that no
+  // entry covers — visible "you didn't track this slot" awareness. Omit to
+  // disable.
+  workHoursStart?: number;
+  workHoursEnd?: number;
 }
 
 const DEFAULT_START_MIN = 8 * 60;   // 8:00
@@ -99,6 +105,30 @@ function findOverlaps(resolved: ResolvedEntry[]): Overlap[] {
   return out;
 }
 
+// Find work-hour minute spans that no entry covers. Bounded by `upperBound`
+// so today's bar doesn't paint stripes across the future.
+function findGaps(
+  resolved: ResolvedEntry[],
+  workStart: number,
+  workEnd: number,
+  upperBound: number
+): { start: number; end: number }[] {
+  const cap = Math.min(workEnd, upperBound);
+  if (cap <= workStart) return [];
+  const sorted = [...resolved].sort((a, b) => a.startMin - b.startMin);
+  const gaps: { start: number; end: number }[] = [];
+  let cursor = workStart;
+  for (const r of sorted) {
+    const segStart = Math.max(r.startMin, workStart);
+    const segEnd = Math.min(r.endMin, cap);
+    if (segEnd <= cursor) continue;
+    if (segStart > cursor) gaps.push({ start: cursor, end: segStart });
+    cursor = Math.max(cursor, segEnd);
+  }
+  if (cursor < cap) gaps.push({ start: cursor, end: cap });
+  return gaps;
+}
+
 function hourMark(min: number): string {
   const h = Math.floor(min / 60) % 24;
   if (h === 0) return '12a';
@@ -107,10 +137,18 @@ function hourMark(min: number): string {
   return `${h - 12}p`;
 }
 
-export function TimelineBar({ entries, selectedEntryId, onSelect, dayStart }: Props) {
+export function TimelineBar({
+  entries,
+  selectedEntryId,
+  onSelect,
+  dayStart,
+  workHoursStart,
+  workHoursEnd,
+}: Props) {
   const [now, setNow] = useState(() => Date.now());
   const hasRunning = useMemo(() => entries.some((e) => e.end === null), [entries]);
   const anchor = dayStart ?? startOfToday();
+  const isToday = anchor === startOfToday();
 
   useEffect(() => {
     if (!hasRunning) return;
@@ -125,6 +163,15 @@ export function TimelineBar({ entries, selectedEntryId, onSelect, dayStart }: Pr
   const { startMin, endMin } = useMemo(() => computeRange(resolved), [resolved]);
   const overlaps = useMemo(() => findOverlaps(resolved), [resolved]);
   const totalMin = Math.max(1, endMin - startMin);
+
+  // Untracked-gap stripes: compute spans inside [workHoursStart, workHoursEnd)
+  // that no entry covers. For today, clamp upper bound to "now" so we don't
+  // paint over the future. For past days, the whole work-hour range is past.
+  const gaps = useMemo(() => {
+    if (workHoursStart === undefined || workHoursEnd === undefined) return [];
+    const upperBound = isToday ? minuteOfDay(now) : 24 * 60;
+    return findGaps(resolved, workHoursStart, workHoursEnd, upperBound);
+  }, [resolved, workHoursStart, workHoursEnd, isToday, now]);
 
   const pct = (m: number) => ((m - startMin) / totalMin) * 100;
 
@@ -169,6 +216,28 @@ export function TimelineBar({ entries, selectedEntryId, onSelect, dayStart }: Pr
             </span>
           </div>
         )}
+
+        {/* Untracked-gap stripes — rendered behind entry segments and lunch band */}
+        {gaps.map((g, i) => {
+          const left = pct(Math.max(g.start, startMin));
+          const right = pct(Math.min(g.end, endMin));
+          const width = right - left;
+          if (width <= 0) return null;
+          return (
+            <div
+              key={`gap-${i}`}
+              className="absolute bottom-2 h-8 pointer-events-none"
+              style={{
+                left: `${left}%`,
+                width: `${width}%`,
+                background:
+                  'repeating-linear-gradient(45deg, transparent 0 6px, rgb(var(--ink-muted) / 0.18) 6px 8px)',
+                borderRadius: 3,
+              }}
+              title="Untracked time during work hours"
+            />
+          );
+        })}
 
         {/* Entry segments */}
         {resolved.map((r) => {

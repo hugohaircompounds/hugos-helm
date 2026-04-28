@@ -15,6 +15,16 @@ export interface Task {
   listId: string | null;
   listName: string | null;
   parentId: string | null;
+  // True when this task only appears in TaskList because its space is in
+  // Settings.extraTaskSpaceIds — i.e. the user is NOT a direct assignee.
+  // Used by TaskList to render a "Lab" pill so the user can tell why an
+  // unassigned task is showing up.
+  viaSpace?: boolean;
+}
+
+export interface ClickUpSpace {
+  id: string;
+  name: string;
 }
 
 export interface TaskDetail extends Task {
@@ -353,6 +363,41 @@ export interface Settings {
   // User-pinned task ids — render in a sticky "Pinned" group at the top of
   // TaskList regardless of status. Insertion order is preserved.
   pinnedTaskIds: string[];
+  // Local-time work-hour bounds in minutes from midnight. Used by TimelineBar
+  // to render diagonal "untracked gap" stripes during work hours where no
+  // entry covers the minute. Defaults: 8:00 → 17:00.
+  workHoursStart: number;
+  workHoursEnd: number;
+  // Extra ClickUp space ids to pull tasks from regardless of assignee. Tasks
+  // arriving via this path get `viaSpace: true` so the UI can flag them.
+  extraTaskSpaceIds: string[];
+  // When false, getAssignedTasks skips the assignee-filtered query entirely
+  // and pulls only from extraTaskSpaceIds. Use when ClickUp's assignee path
+  // is too slow and the user routes their work through a designated space.
+  assigneeFilterEnabled: boolean;
+  // UI-only status grouping. Each equivalence merges multiple raw ClickUp
+  // statuses into one Helm-side display group. Purely cosmetic — never
+  // written back to ClickUp. Order in the array is preserved.
+  statusEquivalences: StatusEquivalence[];
+  // Idle / lock detection. When the OS reports the screen locked or the
+  // system suspended for longer than `idleTimeoutMin` while a timer was
+  // running, the renderer is prompted to truncate the running entry.
+  idleDetectionEnabled: boolean;
+  idleTimeoutMin: number;
+  lockTriggersIdle: boolean;
+}
+
+export interface IdleTruncatePromptPayload {
+  idleStartedAt: number;
+  idleEndedAt: number;
+  taskId: string | null;
+  taskName: string | null;
+}
+
+export interface StatusEquivalence {
+  groupName: string;
+  members: string[];
+  color?: string;
 }
 
 export interface ListStatus {
@@ -388,6 +433,7 @@ export interface HelmApi {
   // clickup
   listTasks: () => Promise<Task[]>;
   getTask: (taskId: string) => Promise<TaskDetail>;
+  listSpaces: () => Promise<ClickUpSpace[]>;
   getListStatuses: (listId: string) => Promise<ListStatus[]>;
   updateTask: (
     taskId: string,
@@ -397,6 +443,9 @@ export interface HelmApi {
   stopTimer: (opts?: { silent?: boolean }) => Promise<TimerState>;
   getTimerState: () => Promise<TimerState>;
   syncTimerFromRemote: () => Promise<TimerState>;
+  // Stop the running timer and retroactively rewrite its end timestamp to
+  // `at`. Used by the idle-truncate flow when the user was locked/away.
+  truncateRunningEntry: (at: number) => Promise<void>;
   listTimeEntries: (range: 'today' | 'week') => Promise<TimeEntry[]>;
   createTimeEntry: (opts: {
     taskId: string | null;
@@ -428,6 +477,7 @@ export interface HelmApi {
   onTimerChanged: (cb: (state: TimerState) => void) => () => void;
   onDescriptionPrompt: (cb: (payload: DescriptionPromptPayload) => void) => () => void;
   onEodFocusEntry: (cb: (payload: EodFocusEntryPayload) => void) => () => void;
+  onIdleTruncatePrompt: (cb: (payload: IdleTruncatePromptPayload) => void) => () => void;
   onJobFired: (cb: (log: JobLog) => void) => () => void;
 }
 

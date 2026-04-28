@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { DescriptionPromptPayload } from '../shared/types';
+import type { DescriptionPromptPayload, IdleTruncatePromptPayload } from '../shared/types';
 import { useClickUp } from './hooks/useClickUp';
 import { useTimer } from './hooks/useTimer';
 import { useCalendar } from './hooks/useCalendar';
@@ -18,12 +18,14 @@ import { TimesheetEditor } from './components/TimesheetEditor';
 import { TimeEntryDetail } from './components/TimeEntryDetail';
 import { NewTimeEntryForm } from './components/NewTimeEntryForm';
 import { DescriptionPrompt } from './components/DescriptionPrompt';
+import { IdleTruncatePrompt } from './components/IdleTruncatePrompt';
 import { Settings } from './components/Settings';
+import { StatsPanel } from './components/StatsPanel';
 import { ResizableColumns } from './components/ResizableColumns';
 import { isRunningId, mergeRunningEntry, runningIdFor } from './utils/runningEntry';
 import { startOfToday } from './utils/time';
 
-type Tab = 'tasks' | 'timesheet' | 'settings';
+type Tab = 'tasks' | 'timesheet' | 'stats' | 'settings';
 
 export default function App() {
   const { tasks, refresh: refreshTasks, loading: tasksLoading, error: tasksError } = useClickUp();
@@ -37,41 +39,80 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [timesheetRange, setTimesheetRange] = useState<TimesheetRange>('today');
-  const timesheet = useTimeEntries(timesheetRange);
-  // Always-week entries used to derive per-task totals for TaskList badges,
-  // regardless of what range the timesheet panel is currently showing.
-  const weeklyEntries = useTimeEntries('week');
+  // Single weekly fetch serves both the timesheet panel and the TaskList
+  // badge. Range switching happens entirely in the renderer (filter below)
+  // so the user never sees a flash of stale data while waiting for an API
+  // roundtrip. Also halves API calls (was: weekly + range-driven duo).
+  const allEntries = useTimeEntries('week');
   const [prompt, setPrompt] = useState<DescriptionPromptPayload | null>(null);
+  const [idlePrompt, setIdlePrompt] = useState<IdleTruncatePromptPayload | null>(null);
   // Manual time-entry creation mode. When true, the middle column shows the
   // NewTimeEntryForm in place of TimeEntryDetail.
   const [creatingEntry, setCreatingEntry] = useState(false);
   const [badgeRange, setBadgeRange] = useState<'today' | 'week'>('week');
+  const [workHoursStart, setWorkHoursStart] = useState<number>(8 * 60);
+  const [workHoursEnd, setWorkHoursEnd] = useState<number>(17 * 60);
+
+  // Load app-level settings once. TaskList loads its own scoped settings;
+  // these are settings the rest of the UI (TimelineBar gap stripes) needs.
+  useEffect(() => {
+    window.helm
+      .getSettings()
+      .then((s) => {
+        if (typeof s.workHoursStart === 'number') setWorkHoursStart(s.workHoursStart);
+        if (typeof s.workHoursEnd === 'number') setWorkHoursEnd(s.workHoursEnd);
+      })
+      .catch(() => {
+        /* keep defaults */
+      });
+  }, []);
+
+  // Filter the weekly entries down to today when the timesheet panel asks
+  // for "today". Pure renderer-side — no fetch, instant switch.
+  const timesheetEntries = useMemo(() => {
+    if (timesheetRange === 'today') {
+      const cutoff = startOfToday();
+      return allEntries.entries.filter((e) => e.start >= cutoff);
+    }
+    return allEntries.entries;
+  }, [allEntries.entries, timesheetRange]);
 
   // Merge the synthetic running entry into the timesheet so the active timer
   // shows up in the list and on the TimelineBar. Recomputes each render so the
   // synthetic duration tracks with useTimer's tick.
   const mergedEntries = useMemo(
-    () => mergeRunningEntry(timesheet.entries, timer, Date.now()),
+    () => mergeRunningEntry(timesheetEntries, timer, Date.now()),
     // elapsedMs intentionally drives the recompute so the duration ticks live.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [timesheet.entries, timer, elapsedMs]
+    [timesheetEntries, timer, elapsedMs]
   );
 
   // Per-task time totals for the TaskList badge. Always builds off the weekly
-  // entries set so the totals are stable across timesheet-range changes; the
-  // synthetic running entry is merged in so the badge ticks live.
+  // entry set so the totals are stable across timesheet-range changes; the
+  // synthetic running entry is merged in so the badge ticks live. Each
+  // entry's duration is credited to its task AND every ancestor via
+  // Task.parentId, so a parent task in the list rolls up the time logged
+  // on its subtasks.
   const taskTotals = useMemo(() => {
     const cutoff = badgeRange === 'today' ? startOfToday() : 0;
-    const merged = mergeRunningEntry(weeklyEntries.entries, timer, Date.now());
+    const merged = mergeRunningEntry(allEntries.entries, timer, Date.now());
+    const taskById = new Map(tasks.map((t) => [t.id, t]));
     const map = new Map<string, number>();
     for (const e of merged) {
       if (!e.taskId) continue;
       if (e.start < cutoff) continue;
-      map.set(e.taskId, (map.get(e.taskId) || 0) + (e.duration || 0));
+      const dur = e.duration || 0;
+      let cursor: string | null = e.taskId;
+      const seen = new Set<string>();
+      while (cursor && !seen.has(cursor)) {
+        seen.add(cursor);
+        map.set(cursor, (map.get(cursor) || 0) + dur);
+        cursor = taskById.get(cursor)?.parentId || null;
+      }
     }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weeklyEntries.entries, timer, elapsedMs, badgeRange]);
+  }, [allEntries.entries, timer, elapsedMs, badgeRange, tasks]);
 
   const selectedEntry = selectedEntryId
     ? mergedEntries.find((e) => e.id === selectedEntryId) || null
@@ -89,30 +130,30 @@ export default function App() {
         pendingReselectTaskId.current =
           selectedEntryId.slice(runningIdFor('').length) || null;
       }
-      timesheet.load();
-      // Refresh weekly totals so the TaskList badge picks up the just-stopped
-      // entry (the synthetic running contribution stops, the persisted entry
-      // takes over).
-      weeklyEntries.load();
+      allEntries.load();
     }
     prevRunning.current = timer.running;
-  }, [timer.running, selectedEntryId, timesheet, weeklyEntries]);
+  }, [timer.running, selectedEntryId, allEntries]);
 
   // After a stop-driven reload, find the matching real entry by taskId and
   // select it so the user keeps viewing what they were just working on.
   useEffect(() => {
     if (!pendingReselectTaskId.current) return;
-    const target = timesheet.entries.find(
+    const target = allEntries.entries.find(
       (e) => e.taskId === pendingReselectTaskId.current
     );
     if (target) {
       setSelectedEntryId(target.id);
       pendingReselectTaskId.current = null;
     }
-  }, [timesheet.entries]);
+  }, [allEntries.entries]);
 
   useEffect(() => {
     return window.helm.onDescriptionPrompt(setPrompt);
+  }, []);
+
+  useEffect(() => {
+    return window.helm.onIdleTruncatePrompt(setIdlePrompt);
   }, []);
 
   // Auto-focus signal that bumps when the EOD scheduler tells us to focus the
@@ -133,7 +174,7 @@ export default function App() {
       <TimerBar state={timer} elapsedMs={elapsedMs} onStop={() => stop()} lexicon={lexicon} />
 
       <nav data-slot="nav" className="h-10 flex items-center gap-1 px-2 border-b border-border">
-        {(['tasks', 'timesheet', 'settings'] as Tab[]).map((t) => (
+        {(['tasks', 'timesheet', 'stats', 'settings'] as Tab[]).map((t) => (
           <button
             key={t}
             data-slot="nav-tab"
@@ -177,11 +218,11 @@ export default function App() {
             {tab === 'timesheet' && (
               <TimesheetEditor
                 entries={mergedEntries}
-                loading={timesheet.loading}
-                error={timesheet.error}
+                loading={allEntries.loading}
+                error={allEntries.error}
                 range={timesheetRange}
                 onRangeChange={setTimesheetRange}
-                onRefresh={timesheet.load}
+                onRefresh={allEntries.load}
                 selectedEntryId={selectedEntryId}
                 onSelectEntry={(id) => {
                   setSelectedEntryId(id);
@@ -191,8 +232,11 @@ export default function App() {
                   setSelectedEntryId(null);
                   setCreatingEntry(true);
                 }}
+                workHoursStart={workHoursStart}
+                workHoursEnd={workHoursEnd}
               />
             )}
+            {tab === 'stats' && <StatsPanel entries={allEntries.entries} tasks={tasks} />}
             {tab === 'settings' && <Settings tasks={tasks} onChanged={refreshTasks} />}
           </section>
         }
@@ -210,18 +254,23 @@ export default function App() {
               <NewTimeEntryForm
                 tasks={tasks}
                 defaultTaskId={timer.taskId}
-                onCreate={timesheet.create}
+                onCreate={allEntries.create}
                 onClose={() => setCreatingEntry(false)}
               />
             )}
             {tab === 'timesheet' && !creatingEntry && (
               <TimeEntryDetail
                 entry={selectedEntry}
-                onSave={timesheet.save}
-                onDelete={timesheet.remove}
+                onSave={allEntries.save}
+                onDelete={allEntries.remove}
                 onClose={() => setSelectedEntryId(null)}
                 focusDescriptionTick={eodFocusTick}
               />
+            )}
+            {tab === 'stats' && (
+              <div className="p-4 text-inkMuted text-sm">
+                Pick a view above. Bars are stacked left-to-right by total time this week.
+              </div>
             )}
             {tab === 'settings' && (
               <div className="p-4 text-inkMuted text-sm">Settings saved automatically.</div>
@@ -251,6 +300,7 @@ export default function App() {
       />
 
       <DescriptionPrompt payload={prompt} onClose={() => setPrompt(null)} />
+      <IdleTruncatePrompt payload={idlePrompt} onClose={() => setIdlePrompt(null)} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { initDb } from './db';
 import { registerIpc } from './ipc/handlers';
 import { startScheduler } from './scheduler';
 import { syncFromRemote } from './scheduler/timer';
+import { startIdleService } from './services/idle';
 
 const REMOTE_SYNC_INTERVAL_MS = 60_000;
 let remoteSyncTimer: NodeJS.Timeout | null = null;
@@ -92,6 +93,7 @@ app.whenReady().then(() => {
   registerIpc(getWindow);
   createWindow();
   startScheduler();
+  startIdleService();
   setupAutoUpdater();
 
   // Reconcile with whatever ClickUp says is running (covers timers started from
