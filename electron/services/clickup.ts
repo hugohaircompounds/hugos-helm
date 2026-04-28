@@ -313,24 +313,16 @@ export async function listTimeEntries(range: 'today' | 'week'): Promise<TimeEntr
   });
   interface Resp {
     data: CUTimeEntry[];
-    last_page?: boolean;
   }
-  // Defensive pagination — ClickUp's /time_entries returns ~100 per page by
-  // default. A typical week is well under that, but during heavy weeks we
-  // would silently truncate. Mirrors the loop in getAssignedTasks above.
-  const all: CUTimeEntry[] = [];
-  let page = 0;
-  while (true) {
-    params.set('page', String(page));
-    const resp = await cu<Resp>(
-      `/team/${workspaceId}/time_entries?${params.toString()}`
-    );
-    all.push(...resp.data);
-    if (resp.last_page || resp.data.length === 0) break;
-    page++;
-    if (page > 10) break; // hard safety
-  }
-  return all.map(normalizeEntry).sort((a, b) => b.start - a.start);
+  // Note: ClickUp's GET /team/{id}/time_entries does NOT support pagination —
+  // it returns the entire result set for the date range in a single response.
+  // An earlier "defensive" pagination loop here multiplied every entry ~10x
+  // because setting page=0,1,2... returned the same data each time and the
+  // endpoint never advertises last_page. Single request only.
+  const resp = await cu<Resp>(
+    `/team/${workspaceId}/time_entries?${params.toString()}`
+  );
+  return resp.data.map(normalizeEntry).sort((a, b) => b.start - a.start);
 }
 
 export async function updateTimeEntry(
