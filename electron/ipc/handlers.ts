@@ -90,6 +90,18 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     (_e, range: 'today' | 'week') => clickup.listTimeEntries(range)
   );
   ipcMain.handle(
+    'clickup:createTimeEntry',
+    (
+      _e,
+      opts: {
+        taskId: string | null;
+        start: number;
+        duration: number;
+        description?: string;
+      }
+    ) => clickup.createTimeEntry(opts)
+  );
+  ipcMain.handle(
     'clickup:updateTimeEntry',
     (_e, id: string, patch: Partial<TimeEntry>) => clickup.updateTimeEntry(id, patch)
   );

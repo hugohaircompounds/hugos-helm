@@ -16,10 +16,12 @@ import { CalendarFeed } from './components/CalendarFeed';
 import { EmailFeed } from './components/EmailFeed';
 import { TimesheetEditor } from './components/TimesheetEditor';
 import { TimeEntryDetail } from './components/TimeEntryDetail';
+import { NewTimeEntryForm } from './components/NewTimeEntryForm';
 import { DescriptionPrompt } from './components/DescriptionPrompt';
 import { Settings } from './components/Settings';
 import { ResizableColumns } from './components/ResizableColumns';
 import { isRunningId, mergeRunningEntry, runningIdFor } from './utils/runningEntry';
+import { startOfToday } from './utils/time';
 
 type Tab = 'tasks' | 'timesheet' | 'settings';
 
@@ -36,7 +38,14 @@ export default function App() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [timesheetRange, setTimesheetRange] = useState<TimesheetRange>('today');
   const timesheet = useTimeEntries(timesheetRange);
+  // Always-week entries used to derive per-task totals for TaskList badges,
+  // regardless of what range the timesheet panel is currently showing.
+  const weeklyEntries = useTimeEntries('week');
   const [prompt, setPrompt] = useState<DescriptionPromptPayload | null>(null);
+  // Manual time-entry creation mode. When true, the middle column shows the
+  // NewTimeEntryForm in place of TimeEntryDetail.
+  const [creatingEntry, setCreatingEntry] = useState(false);
+  const [badgeRange, setBadgeRange] = useState<'today' | 'week'>('week');
 
   // Merge the synthetic running entry into the timesheet so the active timer
   // shows up in the list and on the TimelineBar. Recomputes each render so the
@@ -47,6 +56,22 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [timesheet.entries, timer, elapsedMs]
   );
+
+  // Per-task time totals for the TaskList badge. Always builds off the weekly
+  // entries set so the totals are stable across timesheet-range changes; the
+  // synthetic running entry is merged in so the badge ticks live.
+  const taskTotals = useMemo(() => {
+    const cutoff = badgeRange === 'today' ? startOfToday() : 0;
+    const merged = mergeRunningEntry(weeklyEntries.entries, timer, Date.now());
+    const map = new Map<string, number>();
+    for (const e of merged) {
+      if (!e.taskId) continue;
+      if (e.start < cutoff) continue;
+      map.set(e.taskId, (map.get(e.taskId) || 0) + (e.duration || 0));
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weeklyEntries.entries, timer, elapsedMs, badgeRange]);
 
   const selectedEntry = selectedEntryId
     ? mergedEntries.find((e) => e.id === selectedEntryId) || null
@@ -65,9 +90,13 @@ export default function App() {
           selectedEntryId.slice(runningIdFor('').length) || null;
       }
       timesheet.load();
+      // Refresh weekly totals so the TaskList badge picks up the just-stopped
+      // entry (the synthetic running contribution stops, the persisted entry
+      // takes over).
+      weeklyEntries.load();
     }
     prevRunning.current = timer.running;
-  }, [timer.running, selectedEntryId, timesheet]);
+  }, [timer.running, selectedEntryId, timesheet, weeklyEntries]);
 
   // After a stop-driven reload, find the matching real entry by taskId and
   // select it so the user keeps viewing what they were just working on.
@@ -140,6 +169,9 @@ export default function App() {
                 onStart={(id) => start(id)}
                 onStop={() => stop()}
                 lexicon={lexicon}
+                taskTotals={taskTotals}
+                badgeRange={badgeRange}
+                onBadgeRangeChange={setBadgeRange}
               />
             )}
             {tab === 'timesheet' && (
@@ -151,7 +183,14 @@ export default function App() {
                 onRangeChange={setTimesheetRange}
                 onRefresh={timesheet.load}
                 selectedEntryId={selectedEntryId}
-                onSelectEntry={setSelectedEntryId}
+                onSelectEntry={(id) => {
+                  setSelectedEntryId(id);
+                  setCreatingEntry(false);
+                }}
+                onNewEntry={() => {
+                  setSelectedEntryId(null);
+                  setCreatingEntry(true);
+                }}
               />
             )}
             {tab === 'settings' && <Settings tasks={tasks} onChanged={refreshTasks} />}
@@ -167,7 +206,15 @@ export default function App() {
                 lexicon={lexicon}
               />
             )}
-            {tab === 'timesheet' && (
+            {tab === 'timesheet' && creatingEntry && (
+              <NewTimeEntryForm
+                tasks={tasks}
+                defaultTaskId={timer.taskId}
+                onCreate={timesheet.create}
+                onClose={() => setCreatingEntry(false)}
+              />
+            )}
+            {tab === 'timesheet' && !creatingEntry && (
               <TimeEntryDetail
                 entry={selectedEntry}
                 onSave={timesheet.save}

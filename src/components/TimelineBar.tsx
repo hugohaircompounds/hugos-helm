@@ -7,6 +7,10 @@ interface Props {
   entries: TimeEntry[];
   selectedEntryId: string | null;
   onSelect: (id: string) => void;
+  // Local-day-aligned midnight (unix ms). Defaults to today's midnight so
+  // existing call sites keep working. Pass an earlier dayStart to render a
+  // past day's bar in the week view.
+  dayStart?: number;
 }
 
 const DEFAULT_START_MIN = 8 * 60;   // 8:00
@@ -23,11 +27,15 @@ interface ResolvedEntry {
   running: boolean;
 }
 
-// Build per-entry projections onto today's minute axis. Entries that started
-// before midnight or ended after midnight are clamped to 0 / 24h so we never
-// render off-day fragments twice.
-function resolveToday(entries: TimeEntry[], now: number): ResolvedEntry[] {
-  const dayStart = startOfToday();
+// Build per-entry projections onto a single day's minute axis. Entries that
+// started before midnight or ended after midnight are clamped to 0 / 24h so we
+// never render off-day fragments twice. `dayStart` is the local-midnight unix
+// ms anchor for whichever day this bar represents.
+function resolveDay(
+  entries: TimeEntry[],
+  now: number,
+  dayStart: number
+): ResolvedEntry[] {
   const dayEnd = dayStart + 24 * 60 * 60 * 1000;
   return entries
     .map<ResolvedEntry | null>((e) => {
@@ -99,9 +107,10 @@ function hourMark(min: number): string {
   return `${h - 12}p`;
 }
 
-export function TimelineBar({ entries, selectedEntryId, onSelect }: Props) {
+export function TimelineBar({ entries, selectedEntryId, onSelect, dayStart }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const hasRunning = useMemo(() => entries.some((e) => e.end === null), [entries]);
+  const anchor = dayStart ?? startOfToday();
 
   useEffect(() => {
     if (!hasRunning) return;
@@ -109,7 +118,10 @@ export function TimelineBar({ entries, selectedEntryId, onSelect }: Props) {
     return () => clearInterval(id);
   }, [hasRunning]);
 
-  const resolved = useMemo(() => resolveToday(entries, now), [entries, now]);
+  const resolved = useMemo(
+    () => resolveDay(entries, now, anchor),
+    [entries, now, anchor]
+  );
   const { startMin, endMin } = useMemo(() => computeRange(resolved), [resolved]);
   const overlaps = useMemo(() => findOverlaps(resolved), [resolved]);
   const totalMin = Math.max(1, endMin - startMin);

@@ -350,6 +350,9 @@ export interface Settings {
   collapsedStatusGroups: string[];
   // Last-used filter state in TaskList; persists across restarts.
   taskFilters: TaskFiltersState;
+  // User-pinned task ids — render in a sticky "Pinned" group at the top of
+  // TaskList regardless of status. Insertion order is preserved.
+  pinnedTaskIds: string[];
 }
 
 export interface ListStatus {
@@ -395,6 +398,12 @@ export interface HelmApi {
   getTimerState: () => Promise<TimerState>;
   syncTimerFromRemote: () => Promise<TimerState>;
   listTimeEntries: (range: 'today' | 'week') => Promise<TimeEntry[]>;
+  createTimeEntry: (opts: {
+    taskId: string | null;
+    start: number;
+    duration: number;
+    description?: string;
+  }) => Promise<TimeEntry>;
   updateTimeEntry: (
     entryId: string,
     patch: Partial<Pick<TimeEntry, 'description' | 'start' | 'end' | 'duration'>>

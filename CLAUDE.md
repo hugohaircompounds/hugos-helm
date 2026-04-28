@@ -44,11 +44,12 @@ Never call external APIs from renderer code. Never call `window.helm.*` methods 
 
 Everything related to starting/stopping a ClickUp timer routes through `electron/scheduler/timer.ts` (`startTimer`, `stopTimer`, `pauseForLater`, `resumePaused`, `syncFromRemote`). Direct calls to `clickup.startTimer`/`clickup.stopTimer` from anywhere else (IPC handlers, cron jobs) will desync `timer_state` and break the audit log.
 
-`stopTimer` has two orthogonal side effects worth knowing:
+`stopTimer` has three orthogonal side effects worth knowing:
 - **Auto-resume after standup**: if the stopped task id matches either `standupTaskIdMon` or `standupTaskIdTueThu` and `resumeTaskId` is set, it starts the stashed task. Pass `skipAutoResume: true` to suppress (used by EOD).
-- **Description prompt**: emits a `description-prompt` event on `timerBus` unless `silent: true`. Scheduler-driven stops are always silent; manual stops are not.
+- **Description prompt**: emits a `description-prompt` event on `timerBus` unless `silent: true`. Scheduler-driven stops are always silent; manual stops are not. The renderer ignores `kind: 'eod'` payloads — EOD uses the inline timesheet editor instead (see scheduled-jobs section below).
+- **Description flush**: any text the renderer buffered via `setRunningDescription` is applied to the just-stopped entry through a follow-up `clickup.updateTimeEntry` call. The buffer is cleared on both `startTimer` and `stopTimer`. This is how a description typed into the running row during 16:55–16:59 lands on the entry that the 16:59 cron auto-stops.
 
-`timerBus` is a typed `EventEmitter` (see the `TimerBus` interface in `timer.ts`). The IPC layer relays its events to the renderer over named IPC channels.
+`timerBus` is a typed `EventEmitter` (see the `TimerBus` interface in `timer.ts`). The IPC layer relays its events to the renderer over named IPC channels (`helm:timer-changed`, `helm:description-prompt`, `helm:eod-focus-entry`).
 
 ### The scheduler is the single source of time
 
@@ -94,6 +95,8 @@ When adding a new color token: add RGB triple to both `:root/dark` and `[data-th
 - **Renderer clock is untrusted.** The only timer tick in `useTimer.ts` is a visual display of `Date.now() - state.startedAt`. All authoritative timing (job firing, elapsed-time accumulation for stop decisions) uses `new Date()` in the main process.
 - **Scheduler jobs must log even when they skip.** The audit log in Settings → "Recent job fires" is the only visibility into what the scheduler did overnight. An error caught and swallowed without a `logJob(name, 'error', msg)` call is an invisible bug.
 - **OAuth redirect URI is hardcoded by port.** `electron/services/auth.ts` uses `http://127.0.0.1:{HELM_OAUTH_PORT}/callback` (default 53217). Changing this requires a matching entry in the Google Cloud OAuth client (though Desktop-type clients auto-allow loopback on any port).
+- **Some timesheet rows are synthetic.** ClickUp's `GET /time_entries` does not include the in-progress entry, so the renderer prepends a synthetic `TimeEntry` whose `id` starts with `__running:` whenever a timer is running. The merge happens in `src/App.tsx` via `mergeRunningEntry()` from `src/utils/runningEntry.ts`. Use `isRunningId(id)` before any code path that calls ClickUp with that id — `updateTimeEntry`/`deleteTimeEntry` against a synthetic id will 404. Description edits on the running row go through `setRunningDescription` (renderer→main buffer), not `updateTimeEntry`. After the timer stops, `App.tsx` reloads `useTimeEntries` and re-selects the now-real entry by `taskId` so the user keeps viewing what they were working on.
+- **Native notifications need `app.setAppUserModelId` on Windows.** Set in `electron/main.ts` to match electron-builder's `appId` (`com.alon.helm`). Without it, `new Notification(...)` silently no-ops on Windows even though `Notification.isSupported()` returns true.
 
 ## Scheduled jobs reference
 
@@ -104,10 +107,12 @@ When adding a new color token: add RGB triple to both `:root/dark` and `[data-th
 | standup-stop-check | every minute                | If a standup id has run ≥ 20 min, stop (triggers auto-resume)|
 | lunch-start        | Mon–Fri 13:00               | `pauseForLater()` — stash running task                      |
 | lunch-end          | Mon–Fri 14:00               | `resumePaused()` — resume stashed task                      |
-| eod-prompt         | Mon–Fri 16:55               | Emit `description-prompt` (EOD kind) to renderer            |
-| eod-stop           | Mon–Fri 16:59               | `stopTimer({ silent: true, skipAutoResume: true })`          |
+| eod-prompt         | Mon–Fri 16:55               | If timer running: emit `eod-focus-entry` + fire OS Notification. Skips if nothing running. |
+| eod-stop           | Mon–Fri 16:59               | `stopTimer({ silent: true, skipAutoResume: true })` — also flushes any buffered description |
 
 A periodic `syncFromRemote()` (60s interval, see `electron/main.ts`) also reconciles local `timer_state` with whatever ClickUp thinks is running, so timers started/stopped from the web or mobile clients appear in Helm.
+
+**EOD flow (16:55 → 16:59)**: the renderer subscribes to `eod-focus-entry`, switches to the Timesheet tab, selects the synthetic running entry, and auto-focuses the description textarea via a `focusDescriptionTick` prop on `TimeEntryDetail`. Keystrokes are debounced (300ms) and shipped to main via `setRunningDescription`, which holds them in `pendingRunningDescription` inside `electron/scheduler/timer.ts`. At 16:59, `eod-stop` calls `stopTimer`, which after stopping the ClickUp timer applies the buffered description through `clickup.updateTimeEntry` (the stop endpoint itself does not accept a description). The legacy autofill modal in `DescriptionPrompt.tsx` no longer renders for `kind: 'eod'`; it remains the path for manual stops.
 
 ## Secret storage
 

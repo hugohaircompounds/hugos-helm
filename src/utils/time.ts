@@ -28,6 +28,23 @@ export function startOfToday(): number {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
+// Local-day-aligned midnight for any timestamp. Used for grouping time entries
+// by day in week view and as the dayStart anchor for per-day TimelineBars.
+export function startOfDay(ts: number): number {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+// Day header label for the week-view timesheet groups. Renders as e.g.
+// "Tuesday, Apr 28". Uses the system locale.
+export function fmtDayHeader(ts: number): string {
+  return new Date(ts).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
 export function minuteOfDay(ts: number): number {
   const d = new Date(ts);
   return d.getHours() * 60 + d.getMinutes();

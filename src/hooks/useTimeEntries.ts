@@ -78,5 +78,25 @@ export function useTimeEntries(range: TimesheetRange) {
     }
   }, []);
 
-  return { entries, loading, error, load, save, remove, setError };
+  const create = useCallback(
+    async (opts: {
+      taskId: string | null;
+      start: number;
+      duration: number;
+      description?: string;
+    }): Promise<TimeEntry | null> => {
+      try {
+        const created = await window.helm.createTimeEntry(opts);
+        setEntries((prev) => [created, ...prev].sort((a, b) => b.start - a.start));
+        setError(null);
+        return created;
+      } catch (e) {
+        setError((e as Error).message);
+        return null;
+      }
+    },
+    []
+  );
+
+  return { entries, loading, error, load, save, remove, create, setError };
 }

@@ -80,6 +80,7 @@ const DEFAULT_SETTINGS: Settings = {
     dueFrom: null,
     dueTo: null,
   },
+  pinnedTaskIds: [],
 };
 
 export function initDb(): Database.Database {
@@ -200,6 +201,12 @@ export function getSettings(): Settings {
     DEFAULT_SETTINGS.taskFilters
   );
 
+  const pinnedTaskIds = parseJsonShape<string[]>(
+    stored['pinnedTaskIds'],
+    (v) => Array.isArray(v) && v.every((s) => typeof s === 'string'),
+    DEFAULT_SETTINGS.pinnedTaskIds
+  );
+
   return {
     timezone: stored['timezone'] || DEFAULT_SETTINGS.timezone,
     clickupWorkspaceId: stored['clickupWorkspaceId'] || null,
@@ -217,6 +224,7 @@ export function getSettings(): Settings {
     taskStatusGroupOrder,
     collapsedStatusGroups,
     taskFilters,
+    pinnedTaskIds,
   };
 }
 

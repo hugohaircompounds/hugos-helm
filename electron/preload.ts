@@ -28,6 +28,7 @@ const api: HelmApi = {
   syncTimerFromRemote: () => ipcRenderer.invoke('timer:syncFromRemote'),
 
   listTimeEntries: (range) => ipcRenderer.invoke('clickup:listTimeEntries', range),
+  createTimeEntry: (opts) => ipcRenderer.invoke('clickup:createTimeEntry', opts),
   updateTimeEntry: (id, patch) =>
     ipcRenderer.invoke('clickup:updateTimeEntry', id, patch),
   deleteTimeEntry: (id) => ipcRenderer.invoke('clickup:deleteTimeEntry', id),

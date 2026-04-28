@@ -6,7 +6,7 @@ import type {
   ThemeLexicon,
   TimerState,
 } from '../../shared/types';
-import { dueUrgency } from '../utils/time';
+import { dueUrgency, fmtDuration } from '../utils/time';
 import { TaskFilterBar } from './TaskFilterBar';
 
 interface Props {
@@ -17,6 +17,11 @@ interface Props {
   onStart: (id: string) => void;
   onStop: () => void;
   lexicon: ThemeLexicon;
+  // Map of taskId → ms tracked over the current badge range. Empty/undefined
+  // gracefully renders as "no badge". Computed in App.tsx from weekly entries.
+  taskTotals?: Map<string, number>;
+  badgeRange?: 'today' | 'week';
+  onBadgeRangeChange?: (range: 'today' | 'week') => void;
 }
 
 const PRIORITY_LABEL: Record<number, string> = {
@@ -37,6 +42,7 @@ function priorityKey(p: Priority): string | undefined {
 // Single scope key for the cross-list default view. If later we split the UI
 // per ClickUp list, the ordering can be re-keyed on listId.
 const SCOPE = '__all__';
+const PINNED_KEY = '__pinned__';
 const SAVE_DEBOUNCE_MS = 400;
 
 const EMPTY_FILTERS: TaskFiltersState = {
@@ -56,10 +62,22 @@ function passesFilters(t: Task, f: TaskFiltersState): boolean {
   return true;
 }
 
-export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, lexicon }: Props) {
+export function TaskList({
+  tasks,
+  timer,
+  selectedId,
+  onSelect,
+  onStart,
+  onStop,
+  lexicon,
+  taskTotals,
+  badgeRange = 'week',
+  onBadgeRangeChange,
+}: Props) {
   const [groupOrder, setGroupOrder] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [filters, setFilters] = useState<TaskFiltersState>(EMPTY_FILTERS);
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load persisted prefs once.
@@ -76,18 +94,20 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
           dueFrom: s.taskFilters?.dueFrom ?? null,
           dueTo: s.taskFilters?.dueTo ?? null,
         });
+        setPinnedIds(s.pinnedTaskIds || []);
       })
       .catch(() => {
         /* keep defaults */
       });
   }, []);
 
-  // Debounced save wrapper. Coalesces rapid reorders/collapses into one write.
+  // Debounced save wrapper. Coalesces rapid reorders/collapses/pins into one write.
   const scheduleSave = useCallback(
     (patch: {
       order?: string[];
       collapsed?: string[];
       filters?: TaskFiltersState;
+      pinned?: string[];
     }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
@@ -101,6 +121,9 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
         if (patch.filters !== undefined) {
           payload.taskFilters = patch.filters;
         }
+        if (patch.pinned !== undefined) {
+          payload.pinnedTaskIds = patch.pinned;
+        }
         window.helm.saveSettings(payload).catch(() => {
           /* non-fatal */
         });
@@ -111,9 +134,25 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
 
   const filtered = useMemo(() => tasks.filter((t) => passesFilters(t, filters)), [tasks, filters]);
 
+  // Pinned tasks bubble to a synthetic group above all status groups. They're
+  // filtered out of their normal status groups so the same task never renders
+  // twice. Insertion order is preserved by walking pinnedIds in order.
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
+
+  const pinnedTasks = useMemo(() => {
+    const byId = new Map(filtered.map((t) => [t.id, t]));
+    const list: Task[] = [];
+    for (const id of pinnedIds) {
+      const t = byId.get(id);
+      if (t) list.push(t);
+    }
+    return list;
+  }, [filtered, pinnedIds]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, { color: string | null; tasks: Task[] }>();
     for (const t of filtered) {
+      if (pinnedSet.has(t.id)) continue;
       const key = t.status || 'open';
       const g = map.get(key) || { color: t.statusColor, tasks: [] };
       g.tasks.push(t);
@@ -130,7 +169,7 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
     }
     const unknown = all.filter(([k]) => !knownSet.has(k));
     return [...known, ...unknown];
-  }, [filtered, groupOrder]);
+  }, [filtered, groupOrder, pinnedSet]);
 
   const total = tasks.length;
   const filteredCount = filtered.length;
@@ -162,6 +201,18 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
     [collapsed, scheduleSave]
   );
 
+  const togglePinned = useCallback(
+    (taskId: string) => {
+      const isPinned = pinnedIds.includes(taskId);
+      const next = isPinned
+        ? pinnedIds.filter((id) => id !== taskId)
+        : [...pinnedIds, taskId];
+      setPinnedIds(next);
+      scheduleSave({ pinned: next });
+    },
+    [pinnedIds, scheduleSave]
+  );
+
   const applyFilters = useCallback(
     (next: TaskFiltersState) => {
       setFilters(next);
@@ -185,6 +236,90 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
     };
   }, [tasks]);
 
+  const renderTaskRow = (t: Task) => {
+    const running = timer.running && timer.taskId === t.id;
+    const selected = selectedId === t.id;
+    const prioKey = priorityKey(t.priority);
+    const pinned = pinnedSet.has(t.id);
+    return (
+      <li
+        key={t.id}
+        onClick={() => onSelect(t.id)}
+        className={`flex items-center justify-between gap-3 px-3 py-2 rounded cursor-pointer border ${
+          selected
+            ? 'bg-panelHi border-accent/50'
+            : 'bg-panel border-transparent hover:bg-panelHi'
+        }`}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            togglePinned(t.id);
+          }}
+          title={pinned ? 'Unpin' : 'Pin to top'}
+          className={`flex-shrink-0 text-base leading-none w-5 text-center ${
+            pinned ? 'text-warn' : 'text-inkMuted/40 hover:text-inkMuted'
+          }`}
+          aria-label={pinned ? 'Unpin task' : 'Pin task'}
+        >
+          {pinned ? '★' : '☆'}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="truncate">{t.name}</div>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            {(() => {
+              const ms = taskTotals?.get(t.id);
+              if (!ms || ms <= 0) return null;
+              return (
+                <span data-slot="task-pill" data-kind="duration">
+                  {fmtDuration(ms)}
+                </span>
+              );
+            })()}
+            {t.priority && (
+              <span data-slot="task-pill" data-priority={prioKey}>
+                {PRIORITY_LABEL[t.priority]}
+              </span>
+            )}
+            {t.listName && (
+              <span data-slot="task-pill" data-kind="list">
+                {t.listName}
+              </span>
+            )}
+            {t.dueDate && (
+              <span
+                data-slot="task-pill"
+                data-kind="due"
+                data-urgency={dueUrgency(t.dueDate)}
+              >
+                Due {new Date(t.dueDate).toLocaleDateString(undefined, {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (running) onStop();
+            else onStart(t.id);
+          }}
+          className={`px-2 py-1 rounded text-xs font-medium border ${
+            running
+              ? 'bg-danger/20 text-danger border-danger/40'
+              : 'bg-success/10 text-success border-success/30 hover:bg-success/20'
+          }`}
+        >
+          {running ? lexicon.stopVerb : lexicon.startVerb}
+        </button>
+      </li>
+    );
+  };
+
+  const pinnedCollapsed = collapsed.includes(PINNED_KEY);
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div data-slot="panel-header">
@@ -202,6 +337,26 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
             </>
           )}
         </span>
+        {onBadgeRangeChange && (
+          <span
+            className="ml-auto inline-flex items-center gap-px text-[10px] uppercase tracking-wider"
+            title="Time-logged badge range"
+          >
+            {(['today', 'week'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => onBadgeRangeChange(r)}
+                className={`px-1.5 py-0.5 border ${
+                  badgeRange === r
+                    ? 'bg-panelHi text-ink border-accent/40'
+                    : 'bg-panel text-inkMuted/70 border-border hover:text-ink'
+                } first:rounded-l last:rounded-r -ml-px first:ml-0`}
+              >
+                {r}
+              </button>
+            ))}
+          </span>
+        )}
       </div>
 
       <TaskFilterBar
@@ -221,6 +376,27 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
         </div>
       ) : (
         <div className="flex flex-col gap-4 p-4 overflow-auto">
+          {pinnedTasks.length > 0 && (
+            <section>
+              <header className="flex items-center gap-2 mb-2 px-2">
+                <button
+                  onClick={() => toggleCollapsed(PINNED_KEY)}
+                  className="text-inkMuted/60 hover:text-ink w-4 text-center text-xs leading-none"
+                  title={pinnedCollapsed ? 'Expand' : 'Collapse'}
+                >
+                  {pinnedCollapsed ? '▸' : '▾'}
+                </button>
+                <span className="text-warn flex-shrink-0">★</span>
+                <h2 className="text-xs uppercase tracking-wider text-inkMuted flex-1">
+                  Pinned <span className="text-inkMuted/60">· {pinnedTasks.length}</span>
+                </h2>
+              </header>
+              {!pinnedCollapsed && (
+                <ul className="flex flex-col gap-1">{pinnedTasks.map(renderTaskRow)}</ul>
+              )}
+            </section>
+          )}
+
           {grouped.map(([status, { color, tasks: list }], i) => {
             const isCollapsed = collapsed.includes(status);
             const atTop = i === 0;
@@ -262,66 +438,7 @@ export function TaskList({ tasks, timer, selectedId, onSelect, onStart, onStop, 
                   </div>
                 </header>
                 {!isCollapsed && (
-                  <ul className="flex flex-col gap-1">
-                    {list.map((t) => {
-                      const running = timer.running && timer.taskId === t.id;
-                      const selected = selectedId === t.id;
-                      const prioKey = priorityKey(t.priority);
-                      return (
-                        <li
-                          key={t.id}
-                          onClick={() => onSelect(t.id)}
-                          className={`flex items-center justify-between gap-3 px-3 py-2 rounded cursor-pointer border ${
-                            selected
-                              ? 'bg-panelHi border-accent/50'
-                              : 'bg-panel border-transparent hover:bg-panelHi'
-                          }`}
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate">{t.name}</div>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                              {t.priority && (
-                                <span data-slot="task-pill" data-priority={prioKey}>
-                                  {PRIORITY_LABEL[t.priority]}
-                                </span>
-                              )}
-                              {t.listName && (
-                                <span data-slot="task-pill" data-kind="list">
-                                  {t.listName}
-                                </span>
-                              )}
-                              {t.dueDate && (
-                                <span
-                                  data-slot="task-pill"
-                                  data-kind="due"
-                                  data-urgency={dueUrgency(t.dueDate)}
-                                >
-                                  Due {new Date(t.dueDate).toLocaleDateString(undefined, {
-                                    month: 'short',
-                                    day: 'numeric',
-                                  })}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (running) onStop();
-                              else onStart(t.id);
-                            }}
-                            className={`px-2 py-1 rounded text-xs font-medium border ${
-                              running
-                                ? 'bg-danger/20 text-danger border-danger/40'
-                                : 'bg-success/10 text-success border-success/30 hover:bg-success/20'
-                            }`}
-                          >
-                            {running ? lexicon.stopVerb : lexicon.startVerb}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <ul className="flex flex-col gap-1">{list.map(renderTaskRow)}</ul>
                 )}
               </section>
             );

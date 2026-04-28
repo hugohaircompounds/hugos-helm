@@ -313,11 +313,24 @@ export async function listTimeEntries(range: 'today' | 'week'): Promise<TimeEntr
   });
   interface Resp {
     data: CUTimeEntry[];
+    last_page?: boolean;
   }
-  const resp = await cu<Resp>(
-    `/team/${workspaceId}/time_entries?${params.toString()}`
-  );
-  return resp.data.map(normalizeEntry).sort((a, b) => b.start - a.start);
+  // Defensive pagination — ClickUp's /time_entries returns ~100 per page by
+  // default. A typical week is well under that, but during heavy weeks we
+  // would silently truncate. Mirrors the loop in getAssignedTasks above.
+  const all: CUTimeEntry[] = [];
+  let page = 0;
+  while (true) {
+    params.set('page', String(page));
+    const resp = await cu<Resp>(
+      `/team/${workspaceId}/time_entries?${params.toString()}`
+    );
+    all.push(...resp.data);
+    if (resp.last_page || resp.data.length === 0) break;
+    page++;
+    if (page > 10) break; // hard safety
+  }
+  return all.map(normalizeEntry).sort((a, b) => b.start - a.start);
 }
 
 export async function updateTimeEntry(
@@ -337,6 +350,29 @@ export async function updateTimeEntry(
     `/team/${workspaceId}/time_entries/${encodeURIComponent(entryId)}`,
     { method: 'PUT', body: JSON.stringify(body) }
   );
+  return normalizeEntry(resp.data);
+}
+
+export async function createTimeEntry(opts: {
+  taskId: string | null;
+  start: number;
+  duration: number;
+  description?: string;
+}): Promise<TimeEntry> {
+  const { workspaceId } = await ensureWorkspace();
+  const body: Record<string, unknown> = {
+    start: opts.start,
+    duration: opts.duration,
+  };
+  if (opts.taskId) body.tid = opts.taskId;
+  if (opts.description) body.description = opts.description;
+  interface Resp {
+    data: CUTimeEntry;
+  }
+  const resp = await cu<Resp>(`/team/${workspaceId}/time_entries`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
   return normalizeEntry(resp.data);
 }
 
