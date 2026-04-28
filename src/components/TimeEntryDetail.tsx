@@ -17,6 +17,11 @@ interface Props {
   // the EOD flow to land the cursor in the right place after the scheduler
   // navigates the user here.
   focusDescriptionTick?: number;
+  // ClickUp URL for the entry's task. Looked up by App.tsx from the loaded
+  // task list. When present, an "Open in ClickUp" button renders in the
+  // panel header. Hidden when the entry has no task or its task isn't
+  // in the user's loaded list.
+  taskUrl?: string | null;
 }
 
 const RUNNING_DESCRIPTION_DEBOUNCE_MS = 300;
@@ -27,6 +32,7 @@ export function TimeEntryDetail({
   onDelete,
   onClose,
   focusDescriptionTick,
+  taskUrl,
 }: Props) {
   const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const runningSaveTimer = useRef<number | null>(null);
@@ -81,6 +87,15 @@ export function TimeEntryDetail({
       <div data-slot="panel-header">
         <span className="title">Entry</span>
         <span className="count font-mono">{running ? 'running' : entry.id}</span>
+        {taskUrl && (
+          <button
+            onClick={() => window.helm.openExternal(taskUrl)}
+            className="ml-auto text-xs px-2 py-0.5 rounded border border-border text-inkMuted hover:text-ink hover:bg-panelHi"
+            title="Open this task in ClickUp"
+          >
+            Open in ClickUp ↗
+          </button>
+        )}
       </div>
       <div className="p-4 flex flex-col gap-4 overflow-auto">
         <div className="flex flex-wrap items-center gap-1.5">

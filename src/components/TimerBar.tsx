@@ -13,10 +13,14 @@ interface Props {
   state: TimerState;
   elapsedMs: number;
   onStop: () => void;
+  // Click handler for the running task name. App.tsx wires this to switch
+  // tabs + select the task in TaskList. Omit / no-op when no behavior is
+  // wanted (idle state ignores it regardless).
+  onTaskClick?: (taskId: string) => void;
   lexicon: ThemeLexicon;
 }
 
-export function TimerBar({ state, elapsedMs, onStop, lexicon }: Props) {
+export function TimerBar({ state, elapsedMs, onStop, onTaskClick, lexicon }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
@@ -102,12 +106,23 @@ export function TimerBar({ state, elapsedMs, onStop, lexicon }: Props) {
 
       <div className="text-center min-w-0 px-4">
         <div data-slot="timer-label">{lexicon.currentTaskLabel}</div>
-        <div
-          data-slot="timer-task"
-          className="text-ink text-lg font-semibold truncate"
-        >
-          {state.taskName || state.taskId}
-        </div>
+        {onTaskClick && state.taskId ? (
+          <button
+            data-slot="timer-task"
+            onClick={() => onTaskClick(state.taskId!)}
+            title="Open this task in the Tasks tab"
+            className="text-ink text-lg font-semibold truncate hover:underline cursor-pointer block w-full"
+          >
+            {state.taskName || state.taskId}
+          </button>
+        ) : (
+          <div
+            data-slot="timer-task"
+            className="text-ink text-lg font-semibold truncate"
+          >
+            {state.taskName || state.taskId}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-4">

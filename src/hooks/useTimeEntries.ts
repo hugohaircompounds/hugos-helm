@@ -36,18 +36,31 @@ export function useTimeEntries(range: TimesheetRange) {
         setEntries((prev) =>
           prev.map((e) => {
             if (e.id !== entryId) return e;
-            // ClickUp's PUT response can omit task info and mis-format duration.
-            // Merge defensively so we don't lose locally-known fields.
+            // Merge precedence: patch (user's intent) → updated (server) → e
+            // (previous local). ClickUp's PUT response routinely omits fields
+            // it just persisted (notably description), so a merge that only
+            // consults the response would silently drop the user's edit and
+            // leave the local list showing the stale value.
             const mergedDuration =
-              Number.isFinite(updated.duration) && updated.duration > 0
+              patch.duration !== undefined
+                ? patch.duration
+                : Number.isFinite(updated.duration) && updated.duration > 0
                 ? updated.duration
                 : e.duration;
             const next: TimeEntry = {
               ...e,
-              description: updated.description ?? e.description,
+              description:
+                patch.description !== undefined
+                  ? patch.description
+                  : updated.description ?? e.description,
               start:
-                Number.isFinite(updated.start) && updated.start > 0 ? updated.start : e.start,
-              end: updated.end ?? e.end,
+                patch.start !== undefined
+                  ? patch.start
+                  : Number.isFinite(updated.start) && updated.start > 0
+                  ? updated.start
+                  : e.start,
+              end:
+                patch.end !== undefined ? patch.end : updated.end ?? e.end,
               duration: mergedDuration,
               taskId: updated.taskId || e.taskId,
               taskName: updated.taskName || e.taskName,

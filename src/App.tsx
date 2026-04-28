@@ -117,6 +117,13 @@ export default function App() {
   const selectedEntry = selectedEntryId
     ? mergedEntries.find((e) => e.id === selectedEntryId) || null
     : null;
+  // Look up the selected entry's task URL so TimeEntryDetail can render an
+  // "Open in ClickUp" affordance. Falls back to null when the entry has no
+  // task or its task isn't in the loaded tasks list (e.g. archived).
+  const selectedEntryTaskUrl = useMemo(() => {
+    if (!selectedEntry?.taskId) return null;
+    return tasks.find((t) => t.id === selectedEntry.taskId)?.url || null;
+  }, [selectedEntry, tasks]);
 
   // When the timer stops, reload entries so ClickUp's just-persisted real
   // entry replaces the synthetic. If the user was viewing the synthetic,
@@ -171,7 +178,16 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-bg text-ink">
-      <TimerBar state={timer} elapsedMs={elapsedMs} onStop={() => stop()} lexicon={lexicon} />
+      <TimerBar
+        state={timer}
+        elapsedMs={elapsedMs}
+        onStop={() => stop()}
+        onTaskClick={(taskId) => {
+          setTab('tasks');
+          setSelected(taskId);
+        }}
+        lexicon={lexicon}
+      />
 
       <nav data-slot="nav" className="h-10 flex items-center gap-1 px-2 border-b border-border">
         {(['tasks', 'timesheet', 'stats', 'settings'] as Tab[]).map((t) => (
@@ -265,6 +281,7 @@ export default function App() {
                 onDelete={allEntries.remove}
                 onClose={() => setSelectedEntryId(null)}
                 focusDescriptionTick={eodFocusTick}
+                taskUrl={selectedEntryTaskUrl}
               />
             )}
             {tab === 'stats' && (
