@@ -87,15 +87,6 @@ export function TimeEntryDetail({
       <div data-slot="panel-header">
         <span className="title">Entry</span>
         <span className="count font-mono">{running ? 'running' : entry.id}</span>
-        {taskUrl && (
-          <button
-            onClick={() => window.helm.openExternal(taskUrl)}
-            className="ml-auto text-xs px-2 py-0.5 rounded border border-border text-inkMuted hover:text-ink hover:bg-panelHi"
-            title="Open this task in ClickUp"
-          >
-            Open in ClickUp ↗
-          </button>
-        )}
       </div>
       <div className="p-4 flex flex-col gap-4 overflow-auto">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -185,6 +176,21 @@ export function TimeEntryDetail({
             />
           </div>
         </div>
+
+        {taskUrl && (
+          <div>
+            <a
+              href={taskUrl}
+              onClick={(e) => {
+                e.preventDefault();
+                window.helm.openExternal(taskUrl);
+              }}
+              className="text-accent text-sm"
+            >
+              Open in ClickUp →
+            </a>
+          </div>
+        )}
 
         {!running && (
           <div className="flex items-center justify-end gap-2 pt-2">
