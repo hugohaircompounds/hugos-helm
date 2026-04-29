@@ -270,7 +270,10 @@ interface RawComment {
   // segment with `type: 'tag'` and a `user.id`. Older comments may omit
   // this; we fall back to a single text segment from `comment_text`.
   comment?: RawCommentSegment[];
-  user?: { username: string };
+  // ClickUp's create-comment response often returns just `{ id }` here,
+  // dropping the username. Capture both so the normalizer can fall back to
+  // a workspace-members cache lookup when username is missing.
+  user?: { id?: number; username?: string };
   date: string;
   // Present on top-level comments only. ClickUp uses both naming variants
   // depending on the response context — capture both.
@@ -364,7 +367,10 @@ function toReplyComment(raw: RawComment, parentId: string): Comment {
     id: raw.id,
     text: raw.comment_text,
     segments: rawSegmentsToSegments(raw.comment, raw.comment_text),
-    user: raw.user?.username || 'unknown',
+    user:
+      raw.user?.username ||
+      lookupUsernameById(raw.user?.id) ||
+      'unknown',
     dateCreated: Number(raw.date),
     dateUpdated: Number(raw.date),
     replyCount: 0,
@@ -396,7 +402,10 @@ function toTopLevelComment(
     id: raw.id,
     text: raw.comment_text,
     segments: rawSegmentsToSegments(raw.comment, raw.comment_text),
-    user: raw.user?.username || 'unknown',
+    user:
+      raw.user?.username ||
+      lookupUsernameById(raw.user?.id) ||
+      'unknown',
     dateCreated,
     dateUpdated: Math.max(dateUpdated, replyMaxCreated, dateCreated),
     replyCount,
@@ -407,10 +416,13 @@ function toTopLevelComment(
 }
 
 // Workspace-member listing for @mention autocomplete. Used by
-// listWorkspaceMembers() with main-process caching layered on top.
+// listWorkspaceMembers() with main-process caching layered on top. Source
+// is the `/team` endpoint's nested `members[]` — `/team/{id}/member` exists
+// in some ClickUp tiers but 404s on others, while `/team` is always
+// available (we already hit it in bootstrap).
 async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
   const { workspaceId } = await ensureWorkspace();
-  interface CUMember {
+  interface CUMemberFull {
     user: {
       id: number;
       username?: string;
@@ -420,13 +432,22 @@ async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
       profilePicture?: string | null;
     };
   }
-  interface Resp {
-    members: CUMember[];
+  interface CUTeamFull {
+    id: string;
+    name: string;
+    members: CUMemberFull[];
   }
-  const resp = await cu<Resp>(`/team/${workspaceId}/member`);
-  return resp.members.map((m) => ({
+  interface Resp {
+    teams: CUTeamFull[];
+  }
+  const resp = await cu<Resp>('/team');
+  const team = resp.teams.find((t) => t.id === workspaceId);
+  const members = team?.members || [];
+  return members.map((m) => ({
     id: m.user.id,
-    username: m.user.username || (m.user.email ? m.user.email.split('@')[0] : `user-${m.user.id}`),
+    username:
+      m.user.username ||
+      (m.user.email ? m.user.email.split('@')[0] : `user-${m.user.id}`),
     email: m.user.email || '',
     initials: m.user.initials || '',
     color: m.user.color ?? null,
@@ -458,6 +479,16 @@ export async function listWorkspaceMembers(opts: { force?: boolean } = {}): Prom
   return fresh;
 }
 
+// Resolve a ClickUp user id to a username via the cached member list.
+// Used by the comment normalizers when ClickUp's create-comment response
+// omits user.username (often happens — only user.id comes back). Returns
+// undefined if the cache is empty or the id isn't in it; callers fall
+// back to "unknown".
+function lookupUsernameById(userId: number | undefined): string | undefined {
+  if (!userId || !cachedMembers) return undefined;
+  return cachedMembers.find((m) => m.id === userId)?.username;
+}
+
 // Convert Helm's CommentSegment[] back into ClickUp's structured `comment`
 // array format. Mention segments become `{ type: 'tag', user: { id } }`;
 // text segments become `{ text }`. Empty text segments are dropped.
@@ -480,6 +511,12 @@ export async function createTaskComment(
   segments: CommentSegment[],
   notifyAll: boolean
 ): Promise<Comment> {
+  // Make sure the workspace-members cache is warm so the normalizer can
+  // resolve the post's author when ClickUp's response omits username.
+  // listWorkspaceMembers() is itself cached + cheap on hit.
+  await listWorkspaceMembers().catch(() => {
+    /* fall back to "unknown" if member fetch fails */
+  });
   const encoded = encodeURIComponent(taskId);
   const body = {
     comment: segmentsToClickUpComment(segments),
@@ -500,6 +537,9 @@ export async function createCommentReply(
   segments: CommentSegment[],
   notifyAll: boolean
 ): Promise<Comment> {
+  await listWorkspaceMembers().catch(() => {
+    /* fall back to "unknown" if member fetch fails */
+  });
   const encoded = encodeURIComponent(parentCommentId);
   const body = {
     comment: segmentsToClickUpComment(segments),
