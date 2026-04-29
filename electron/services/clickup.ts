@@ -257,9 +257,14 @@ export async function listSpaces(): Promise<ClickUpSpace[]> {
 interface RawCommentSegment {
   text?: string;
   type?: string; // "tag" for @mentions
-  user?: { id: number; username?: string };
-  // Other ClickUp segment fields (attributes, hyperlinks, etc.) are present
-  // but ignored — we collapse rich formatting to plain text segments.
+  // ClickUp returns user.id as either a number or a string depending on
+  // the endpoint and the comment's age — accept both. Some payloads also
+  // wrap mentions as `{ type: 'tag-data-user-mention' }` or include
+  // `tag.attributes.user`; the parser is lenient.
+  user?: { id?: number | string; username?: string };
+  attributes?: { user?: { id?: number | string; username?: string } };
+  // Other ClickUp segment fields (hyperlinks, etc.) are present but
+  // ignored — we collapse rich formatting to plain text segments.
   [key: string]: unknown;
 }
 
@@ -284,6 +289,15 @@ interface RawComment {
 // Convert ClickUp's structured `comment` array (or fall back to plaintext)
 // into Helm's `CommentSegment[]`. Adjacent text-only segments are coalesced
 // so `[{ text: 'hi ' }, { text: 'there' }]` becomes one segment.
+function coerceUserId(value: number | string | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
 function rawSegmentsToSegments(
   raw: RawCommentSegment[] | undefined,
   fallbackText: string
@@ -293,12 +307,19 @@ function rawSegmentsToSegments(
   }
   const out: CommentSegment[] = [];
   for (const seg of raw) {
-    if (seg.type === 'tag' && seg.user && typeof seg.user.id === 'number') {
-      out.push({
-        kind: 'mention',
-        userId: seg.user.id,
-        display: seg.user.username || `user-${seg.user.id}`,
-      });
+    // Tag segments come in a few shapes across ClickUp endpoints —
+    // sometimes `seg.user`, sometimes nested under `seg.attributes.user`,
+    // and `id` may be a number or a string. Be permissive.
+    const tagUser = seg.user || seg.attributes?.user;
+    const tagUserId = coerceUserId(tagUser?.id);
+    const isTag = seg.type === 'tag' || (tagUser && tagUserId !== null);
+    if (isTag && tagUserId !== null) {
+      const username = tagUser?.username;
+      // `lookupUsernameById` resolves through the workspace-members cache
+      // so a tag without an inline username still renders the right name.
+      const display =
+        username || lookupUsernameById(tagUserId) || `user-${tagUserId}`;
+      out.push({ kind: 'mention', userId: tagUserId, display });
       continue;
     }
     const text = typeof seg.text === 'string' ? seg.text : '';
@@ -531,6 +552,20 @@ async function getCallingUser(): Promise<WorkspaceMember | null> {
   return cachedMembers?.find((m) => m.id === callingId) ?? null;
 }
 
+// Resolve the post's author from the response, falling back to lookups
+// against the workspace-members cache and finally the calling user. Used
+// by createTaskComment / createCommentReply.
+function resolvePostedAuthor(
+  raw: RawComment,
+  callingUser: WorkspaceMember | null
+): string {
+  if (raw.user?.username) return raw.user.username;
+  const byId = lookupUsernameById(raw.user?.id);
+  if (byId) return byId;
+  if (callingUser?.username) return callingUser.username;
+  return 'unknown';
+}
+
 export async function createTaskComment(
   taskId: string,
   segments: CommentSegment[],
@@ -543,23 +578,28 @@ export async function createTaskComment(
     notify_all: notifyAll,
     assignee: null,
   };
-  // ClickUp's create-comment response is a top-level RawComment-shaped
-  // object (not wrapped in { comments: [] }). Treat it as such.
   const raw = await cu<RawComment>(`/task/${encoded}/comment`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  // Patch the raw with what we know locally before normalizing — the API
-  // response routinely drops user and the structured comment array.
-  const enriched: RawComment = {
-    ...raw,
-    user: raw.user || (callingUser
-      ? { id: callingUser.id, username: callingUser.username }
-      : undefined),
-    comment: raw.comment ?? segmentsToClickUpComment(segments),
-    comment_text: raw.comment_text || segmentsToPlaintext(segments),
+  // Build the Comment directly. ClickUp's create response is thin —
+  // routinely omits user and the structured comment array, plus
+  // re-encoding the segments through the normalizer drops display names
+  // (only user.id round-trips, then decode falls back to user-{id}). The
+  // segments we sent are already correct; trust them.
+  const dateCreated = Number(raw.date) || Date.now();
+  return {
+    id: raw.id,
+    text: raw.comment_text || segmentsToPlaintext(segments),
+    segments,
+    user: resolvePostedAuthor(raw, callingUser),
+    dateCreated,
+    dateUpdated: dateCreated,
+    replyCount: 0,
+    parentId: null,
+    replies: [],
+    repliesLoaded: true,
   };
-  return toTopLevelComment(enriched, [], true);
 }
 
 export async function createCommentReply(
@@ -577,15 +617,19 @@ export async function createCommentReply(
     method: 'POST',
     body: JSON.stringify(body),
   });
-  const enriched: RawComment = {
-    ...raw,
-    user: raw.user || (callingUser
-      ? { id: callingUser.id, username: callingUser.username }
-      : undefined),
-    comment: raw.comment ?? segmentsToClickUpComment(segments),
-    comment_text: raw.comment_text || segmentsToPlaintext(segments),
+  const dateCreated = Number(raw.date) || Date.now();
+  return {
+    id: raw.id,
+    text: raw.comment_text || segmentsToPlaintext(segments),
+    segments,
+    user: resolvePostedAuthor(raw, callingUser),
+    dateCreated,
+    dateUpdated: dateCreated,
+    replyCount: 0,
+    parentId: parentCommentId,
+    replies: [],
+    repliesLoaded: true,
   };
-  return toReplyComment(enriched, parentCommentId);
 }
 
 export async function loadCommentReplies(commentId: string): Promise<Comment[]> {
