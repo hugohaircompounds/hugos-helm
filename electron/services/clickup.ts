@@ -506,17 +506,37 @@ function segmentsToClickUpComment(
   return out;
 }
 
+// ClickUp's create-comment / create-reply responses are inconsistent —
+// `user` may be missing entirely, the structured `comment` array is often
+// omitted, and `comment_text` is sometimes the only payload field beyond
+// `id`+`date`. The segments we sent are the source of truth for what
+// ClickUp persisted, so use them directly and let a follow-up refetch
+// reconcile if anything actually diverged.
+function segmentsToPlaintext(segs: CommentSegment[]): string {
+  return segs
+    .map((s) => (s.kind === 'mention' ? `@${s.display}` : s.value))
+    .join('');
+}
+
+// Resolve the calling user from settings + cached members so we can
+// attribute freshly-posted comments to the right author when ClickUp's
+// response omits `user`. Returns null if we don't have enough info; the
+// caller falls through to "unknown" in that case.
+async function getCallingUser(): Promise<WorkspaceMember | null> {
+  const s = getSettings();
+  if (!s.clickupUserId) return null;
+  const callingId = Number(s.clickupUserId);
+  if (!Number.isFinite(callingId)) return null;
+  await listWorkspaceMembers().catch(() => null);
+  return cachedMembers?.find((m) => m.id === callingId) ?? null;
+}
+
 export async function createTaskComment(
   taskId: string,
   segments: CommentSegment[],
   notifyAll: boolean
 ): Promise<Comment> {
-  // Make sure the workspace-members cache is warm so the normalizer can
-  // resolve the post's author when ClickUp's response omits username.
-  // listWorkspaceMembers() is itself cached + cheap on hit.
-  await listWorkspaceMembers().catch(() => {
-    /* fall back to "unknown" if member fetch fails */
-  });
+  const callingUser = await getCallingUser();
   const encoded = encodeURIComponent(taskId);
   const body = {
     comment: segmentsToClickUpComment(segments),
@@ -529,7 +549,17 @@ export async function createTaskComment(
     method: 'POST',
     body: JSON.stringify(body),
   });
-  return toTopLevelComment(raw, [], true);
+  // Patch the raw with what we know locally before normalizing — the API
+  // response routinely drops user and the structured comment array.
+  const enriched: RawComment = {
+    ...raw,
+    user: raw.user || (callingUser
+      ? { id: callingUser.id, username: callingUser.username }
+      : undefined),
+    comment: raw.comment ?? segmentsToClickUpComment(segments),
+    comment_text: raw.comment_text || segmentsToPlaintext(segments),
+  };
+  return toTopLevelComment(enriched, [], true);
 }
 
 export async function createCommentReply(
@@ -537,9 +567,7 @@ export async function createCommentReply(
   segments: CommentSegment[],
   notifyAll: boolean
 ): Promise<Comment> {
-  await listWorkspaceMembers().catch(() => {
-    /* fall back to "unknown" if member fetch fails */
-  });
+  const callingUser = await getCallingUser();
   const encoded = encodeURIComponent(parentCommentId);
   const body = {
     comment: segmentsToClickUpComment(segments),
@@ -549,7 +577,15 @@ export async function createCommentReply(
     method: 'POST',
     body: JSON.stringify(body),
   });
-  return toReplyComment(raw, parentCommentId);
+  const enriched: RawComment = {
+    ...raw,
+    user: raw.user || (callingUser
+      ? { id: callingUser.id, username: callingUser.username }
+      : undefined),
+    comment: raw.comment ?? segmentsToClickUpComment(segments),
+    comment_text: raw.comment_text || segmentsToPlaintext(segments),
+  };
+  return toReplyComment(enriched, parentCommentId);
 }
 
 export async function loadCommentReplies(commentId: string): Promise<Comment[]> {
