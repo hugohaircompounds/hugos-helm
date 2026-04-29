@@ -455,6 +455,60 @@ export async function listWorkspaceMembers(opts: { force?: boolean } = {}): Prom
   return fresh;
 }
 
+// Convert Helm's CommentSegment[] back into ClickUp's structured `comment`
+// array format. Mention segments become `{ type: 'tag', user: { id } }`;
+// text segments become `{ text }`. Empty text segments are dropped.
+function segmentsToClickUpComment(
+  segments: CommentSegment[]
+): Array<{ text?: string; type?: string; user?: { id: number } }> {
+  const out: Array<{ text?: string; type?: string; user?: { id: number } }> = [];
+  for (const seg of segments) {
+    if (seg.kind === 'mention') {
+      out.push({ type: 'tag', user: { id: seg.userId } });
+    } else if (seg.value) {
+      out.push({ text: seg.value });
+    }
+  }
+  return out;
+}
+
+export async function createTaskComment(
+  taskId: string,
+  segments: CommentSegment[],
+  notifyAll: boolean
+): Promise<Comment> {
+  const encoded = encodeURIComponent(taskId);
+  const body = {
+    comment: segmentsToClickUpComment(segments),
+    notify_all: notifyAll,
+    assignee: null,
+  };
+  // ClickUp's create-comment response is a top-level RawComment-shaped
+  // object (not wrapped in { comments: [] }). Treat it as such.
+  const raw = await cu<RawComment>(`/task/${encoded}/comment`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return toTopLevelComment(raw, [], true);
+}
+
+export async function createCommentReply(
+  parentCommentId: string,
+  segments: CommentSegment[],
+  notifyAll: boolean
+): Promise<Comment> {
+  const encoded = encodeURIComponent(parentCommentId);
+  const body = {
+    comment: segmentsToClickUpComment(segments),
+    notify_all: notifyAll,
+  };
+  const raw = await cu<RawComment>(`/comment/${encoded}/reply`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return toReplyComment(raw, parentCommentId);
+}
+
 export async function loadCommentReplies(commentId: string): Promise<Comment[]> {
   const raws = await fetchCommentReplies(commentId);
   return raws.map((r) => toReplyComment(r, commentId));

@@ -1,5 +1,6 @@
 import { app, ipcMain, shell, BrowserWindow } from 'electron';
 import type {
+  CommentSegment,
   DescriptionPromptPayload,
   Settings,
   Task,
@@ -83,6 +84,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     clickup.loadCommentReplies(commentId)
   );
   ipcMain.handle('clickup:listWorkspaceMembers', () => clickup.listWorkspaceMembers());
+  ipcMain.handle(
+    'clickup:createTaskComment',
+    (_e, taskId: string, segments: CommentSegment[], notifyAll: boolean) =>
+      clickup.createTaskComment(taskId, segments, notifyAll)
+  );
+  ipcMain.handle(
+    'clickup:createCommentReply',
+    (_e, parentCommentId: string, segments: CommentSegment[], notifyAll: boolean) =>
+      clickup.createCommentReply(parentCommentId, segments, notifyAll)
+  );
 
   ipcMain.handle('timer:start', async (_e, taskId: string) => {
     return timerStart(taskId, { rememberResume: false });

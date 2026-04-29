@@ -9,6 +9,7 @@ import type {
 import { dueUrgency } from '../utils/time';
 import { useTaskDetailCache } from '../hooks/useTaskDetailCache';
 import { useListStatuses } from '../hooks/useListStatuses';
+import { MentionCompose } from './MentionCompose';
 
 interface Props {
   taskId: string | null;
@@ -274,10 +275,10 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
         </section>
       )}
 
-      {detail.comments.length > 0 && (
-        <section>
-          <h3 className="text-xs uppercase tracking-wider text-inkMuted mb-2">Comments</h3>
-          <ul className="flex flex-col gap-2">
+      <section>
+        <h3 className="text-xs uppercase tracking-wider text-inkMuted mb-2">Comments</h3>
+        {detail.comments.length > 0 && (
+          <ul className="flex flex-col gap-2 mb-3">
             {detail.comments.map((c) => (
               <CommentThread
                 key={c.id}
@@ -295,11 +296,56 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
                   setDetail(next);
                   cache.set(detail.id, next);
                 }}
+                onReplyPosted={(parentId, reply) => {
+                  if (!detail) return;
+                  const next: TaskDetailType = {
+                    ...detail,
+                    comments: detail.comments.map((existing) =>
+                      existing.id === parentId
+                        ? {
+                            ...existing,
+                            replies: [...existing.replies, reply],
+                            replyCount: existing.replyCount + 1,
+                            repliesLoaded: true,
+                            dateUpdated: Math.max(
+                              existing.dateUpdated,
+                              reply.dateCreated
+                            ),
+                          }
+                        : existing
+                    ),
+                  };
+                  setDetail(next);
+                  cache.set(detail.id, next);
+                }}
               />
             ))}
           </ul>
-        </section>
-      )}
+        )}
+        <div className="border border-border rounded p-3 bg-panel/40">
+          <div className="text-xs text-inkMuted uppercase tracking-wider mb-2">
+            Start a new thread
+          </div>
+          <MentionCompose
+            placeholder="What's on your mind? Posts as a new thread on this task."
+            submitLabel="Post"
+            onSubmit={async (segments, notifyAll) => {
+              if (!detail) return;
+              const created = await window.helm.createTaskComment(
+                detail.id,
+                segments,
+                notifyAll
+              );
+              const next: TaskDetailType = {
+                ...detail,
+                comments: [created, ...detail.comments],
+              };
+              setDetail(next);
+              cache.set(detail.id, next);
+            }}
+          />
+        </div>
+      </section>
       </div>
     </div>
   );
@@ -308,9 +354,11 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
 function CommentThread({
   comment,
   onRepliesLoaded,
+  onReplyPosted,
 }: {
   comment: CommentType;
   onRepliesLoaded: (parentId: string, replies: CommentType[]) => void;
+  onReplyPosted: (parentId: string, reply: CommentType) => void;
 }) {
   // Head thread (replies eagerly loaded server-side) starts expanded; every
   // other thread starts collapsed. The user toggles individual threads
@@ -319,6 +367,7 @@ function CommentThread({
   const [expanded, setExpanded] = useState(initiallyExpanded);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replying, setReplying] = useState(false);
 
   async function toggle() {
     if (expanded) {
@@ -341,13 +390,50 @@ function CommentThread({
     setExpanded(true);
   }
 
+  async function openReply() {
+    // Auto-expand the thread when the user starts replying so they can see
+    // what they're replying to in context.
+    if (!expanded) {
+      if (!comment.repliesLoaded && comment.replyCount > 0) {
+        setLoading(true);
+        setError(null);
+        try {
+          const replies = await window.helm.loadCommentReplies(comment.id);
+          onRepliesLoaded(comment.id, replies);
+        } catch (e) {
+          setError((e as Error).message);
+          setLoading(false);
+          return;
+        }
+        setLoading(false);
+      }
+      setExpanded(true);
+    }
+    setReplying(true);
+  }
+
   const showDisclosure = comment.replyCount > 0;
+  const replyContextDate = new Date(comment.dateCreated).toLocaleDateString(
+    undefined,
+    { month: 'short', day: 'numeric' }
+  );
 
   return (
     <li className="text-sm rounded bg-panel border border-border">
       <div className="px-3 py-2">
-        <div className="text-inkMuted text-xs mb-1">
-          {comment.user} · {new Date(comment.dateCreated).toLocaleString()}
+        <div className="text-inkMuted text-xs mb-1 flex items-center justify-between gap-2">
+          <span>
+            {comment.user} · {new Date(comment.dateCreated).toLocaleString()}
+          </span>
+          {!replying && (
+            <button
+              onClick={openReply}
+              className="text-inkMuted hover:text-accent text-xs"
+              title="Reply in this thread"
+            >
+              Reply
+            </button>
+          )}
         </div>
         <CommentBody comment={comment} />
         {showDisclosure && (
@@ -376,6 +462,27 @@ function CommentThread({
             </li>
           ))}
         </ul>
+      )}
+
+      {replying && (
+        <div className="border-t border-border pl-6 pr-3 py-3 bg-panel/40">
+          <MentionCompose
+            autoFocus
+            placeholder="Reply in this thread…"
+            submitLabel="Reply"
+            contextLabel={`Reply to ${comment.user}'s thread · ${replyContextDate}`}
+            onCancel={() => setReplying(false)}
+            onSubmit={async (segments, notifyAll) => {
+              const reply = await window.helm.createCommentReply(
+                comment.id,
+                segments,
+                notifyAll
+              );
+              onReplyPosted(comment.id, reply);
+              setReplying(false);
+            }}
+          />
+        </div>
       )}
     </li>
   );

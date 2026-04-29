@@ -484,6 +484,21 @@ export interface HelmApi {
   // 10-minute TTL — call freely from the renderer; only the first call per
   // window hits the network.
   listWorkspaceMembers: () => Promise<WorkspaceMember[]>;
+  // Post a new top-level comment (starts a new thread on the task). The
+  // segments array carries plain text + mention tags; main converts to
+  // ClickUp's structured `comment` array so @mentions notify their target.
+  createTaskComment: (
+    taskId: string,
+    segments: CommentSegment[],
+    notifyAll: boolean
+  ) => Promise<Comment>;
+  // Post a reply into an existing thread. parentCommentId is the top-level
+  // comment's id (== thread id in ClickUp's model).
+  createCommentReply: (
+    parentCommentId: string,
+    segments: CommentSegment[],
+    notifyAll: boolean
+  ) => Promise<Comment>;
   updateTask: (
     taskId: string,
     patch: Partial<Pick<Task, 'name' | 'description' | 'status' | 'priority' | 'dueDate'>>

@@ -28,6 +28,10 @@ const api: HelmApi = {
   loadCommentReplies: (commentId) =>
     ipcRenderer.invoke('clickup:loadCommentReplies', commentId),
   listWorkspaceMembers: () => ipcRenderer.invoke('clickup:listWorkspaceMembers'),
+  createTaskComment: (taskId, segments, notifyAll) =>
+    ipcRenderer.invoke('clickup:createTaskComment', taskId, segments, notifyAll),
+  createCommentReply: (parentCommentId, segments, notifyAll) =>
+    ipcRenderer.invoke('clickup:createCommentReply', parentCommentId, segments, notifyAll),
 
   startTimer: (id) => ipcRenderer.invoke('timer:start', id),
   stopTimer: (opts) => ipcRenderer.invoke('timer:stop', opts),
