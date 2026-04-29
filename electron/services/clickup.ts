@@ -83,13 +83,14 @@ interface CUTask {
   name: string;
   text_content: string | null;
   description: string | null;
-  status?: { status: string; color: string };
+  status?: { status: string; color: string; type?: string };
   priority?: { priority: string } | null;
   due_date: string | null;
   url: string;
   parent: string | null;
   list?: { id: string; name: string };
   assignees?: { id: number }[];
+  date_updated?: string;
 }
 
 const PRIORITY_MAP: Record<string, Priority> = {
@@ -121,6 +122,12 @@ interface TasksResp {
   last_page?: boolean;
 }
 
+// Recently-closed tasks ("completed", "won't do", etc.) stay visible for
+// this many days after their last update. Anything older drops off so the
+// list doesn't accumulate years of historical work. Open and in-progress
+// tasks are unaffected — they're always visible.
+const CLOSED_TASK_VISIBLE_DAYS = 14;
+
 // Run a paginated /team/{id}/task query with the given filter params and
 // return all matching CUTask rows. Caller is responsible for normalizing.
 async function fetchTasksWithFilters(
@@ -134,8 +141,11 @@ async function fetchTasksWithFilters(
   // walk in App.tsx taskTotals) and timers are typically started on the
   // parent anyway. If a subtask must be visible, drag it to a configured
   // space instead.
+  //
+  // include_closed=true so completed work stays visible to the user; we
+  // post-filter to a rolling window below to keep the list bounded.
   const params = new URLSearchParams({
-    include_closed: 'false',
+    include_closed: 'true',
     order_by: 'updated',
     reverse: 'true',
   });
@@ -155,7 +165,17 @@ async function fetchTasksWithFilters(
     page++;
     if (page > 10) break; // hard safety
   }
-  return all;
+  // Post-filter: drop closed tasks whose last update is outside the
+  // visibility window. ClickUp's status.type === 'closed' is the canonical
+  // signal (covers "completed", "won't do", and any other closed-type
+  // statuses the workspace defines). Open/in-progress/custom statuses are
+  // never bounded — they stay visible regardless of age.
+  const cutoff = Date.now() - CLOSED_TASK_VISIBLE_DAYS * 86_400_000;
+  return all.filter((t) => {
+    if (t.status?.type !== 'closed') return true;
+    const updated = t.date_updated ? Number(t.date_updated) : 0;
+    return updated >= cutoff;
+  });
 }
 
 export async function getAssignedTasks(): Promise<Task[]> {
