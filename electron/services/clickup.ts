@@ -1,8 +1,11 @@
 import type {
+  ClickUpFolder,
+  ClickUpList,
   ClickUpSpace,
   Comment,
   CommentSegment,
   ListStatus,
+  NewTaskPayload,
   Priority,
   Task,
   TaskDetail,
@@ -512,6 +515,99 @@ export async function createCommentReply(
 export async function loadCommentReplies(commentId: string): Promise<Comment[]> {
   const raws = await fetchCommentReplies(commentId);
   return raws.map((r) => toReplyComment(r, commentId));
+}
+
+// ---------- picker tree (Space → Folder → List) for create-task modal ----------
+//
+// The cascade is stable on the timescale of a session — folders rarely
+// move, lists rarely get renamed mid-day. Cache each level in main with a
+// 10-min TTL so repeated opens of the modal don't refetch on every keystroke.
+
+const PICKER_TREE_TTL_MS = 10 * 60_000;
+
+interface CachedFolders {
+  at: number;
+  data: ClickUpFolder[];
+}
+interface CachedLists {
+  at: number;
+  data: ClickUpList[];
+}
+
+const foldersBySpace = new Map<string, CachedFolders>();
+const listsByFolder = new Map<string, CachedLists>();
+const folderlessListsBySpace = new Map<string, CachedLists>();
+
+function isFresh(entry: { at: number } | undefined): boolean {
+  return !!entry && Date.now() - entry.at < PICKER_TREE_TTL_MS;
+}
+
+export async function listFolders(spaceId: string): Promise<ClickUpFolder[]> {
+  const cached = foldersBySpace.get(spaceId);
+  if (isFresh(cached)) return cached!.data;
+  interface Resp {
+    folders: { id: string; name: string }[];
+  }
+  const resp = await cu<Resp>(
+    `/space/${encodeURIComponent(spaceId)}/folder?archived=false`
+  );
+  const data = resp.folders.map((f) => ({ id: f.id, name: f.name }));
+  foldersBySpace.set(spaceId, { at: Date.now(), data });
+  return data;
+}
+
+export async function listListsInFolder(folderId: string): Promise<ClickUpList[]> {
+  const cached = listsByFolder.get(folderId);
+  if (isFresh(cached)) return cached!.data;
+  interface Resp {
+    lists: { id: string; name: string }[];
+  }
+  const resp = await cu<Resp>(
+    `/folder/${encodeURIComponent(folderId)}/list?archived=false`
+  );
+  const data = resp.lists.map((l) => ({ id: l.id, name: l.name, folderless: false }));
+  listsByFolder.set(folderId, { at: Date.now(), data });
+  return data;
+}
+
+export async function listFolderlessLists(spaceId: string): Promise<ClickUpList[]> {
+  const cached = folderlessListsBySpace.get(spaceId);
+  if (isFresh(cached)) return cached!.data;
+  interface Resp {
+    lists: { id: string; name: string }[];
+  }
+  const resp = await cu<Resp>(
+    `/space/${encodeURIComponent(spaceId)}/list?archived=false`
+  );
+  const data = resp.lists.map((l) => ({ id: l.id, name: l.name, folderless: true }));
+  folderlessListsBySpace.set(spaceId, { at: Date.now(), data });
+  return data;
+}
+
+export async function createTask(
+  listId: string,
+  payload: NewTaskPayload
+): Promise<Task> {
+  const body: Record<string, unknown> = {
+    name: payload.name,
+    notify_all: false,
+  };
+  if (payload.description !== undefined) body.description = payload.description;
+  if (payload.status) body.status = payload.status;
+  if (payload.priority !== undefined && payload.priority !== null) {
+    body.priority = payload.priority;
+  }
+  if (payload.dueDate !== undefined && payload.dueDate !== null) {
+    body.due_date = payload.dueDate;
+  }
+  if (payload.assignees && payload.assignees.length) {
+    body.assignees = payload.assignees;
+  }
+  const resp = await cu<CUTask>(`/list/${encodeURIComponent(listId)}/task`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return normalizeTask(resp);
 }
 
 export async function getTaskDetail(taskId: string): Promise<TaskDetail> {

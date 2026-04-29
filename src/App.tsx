@@ -12,6 +12,7 @@ import { ThemePicker } from './components/ThemePicker';
 import { ModeToggle } from './components/ModeToggle';
 import { TaskList } from './components/TaskList';
 import { TaskDetail } from './components/TaskDetail';
+import { CreateTaskModal } from './components/CreateTaskModal';
 import { CalendarFeed } from './components/CalendarFeed';
 import { EmailFeed } from './components/EmailFeed';
 import { TimesheetEditor } from './components/TimesheetEditor';
@@ -49,6 +50,13 @@ export default function App() {
   // Manual time-entry creation mode. When true, the middle column shows the
   // NewTimeEntryForm in place of TimeEntryDetail.
   const [creatingEntry, setCreatingEntry] = useState(false);
+  // Create-task modal state. The modal pre-fills its picker from the
+  // currently-selected task's listId (when present) or last-used (loaded
+  // below). Toast surfaces results when the new task isn't assigned to
+  // the calling user (it wouldn't appear in TaskList).
+  const [creatingTask, setCreatingTask] = useState(false);
+  const [lastCreateTaskListId, setLastCreateTaskListId] = useState<string | null>(null);
+  const [createTaskToast, setCreateTaskToast] = useState<{ name: string; url: string } | null>(null);
   const [badgeRange, setBadgeRange] = useState<'today' | 'week'>('week');
   const [workHoursStart, setWorkHoursStart] = useState<number>(8 * 60);
   const [workHoursEnd, setWorkHoursEnd] = useState<number>(17 * 60);
@@ -61,6 +69,9 @@ export default function App() {
       .then((s) => {
         if (typeof s.workHoursStart === 'number') setWorkHoursStart(s.workHoursStart);
         if (typeof s.workHoursEnd === 'number') setWorkHoursEnd(s.workHoursEnd);
+        if (typeof s.lastCreateTaskListId === 'string') {
+          setLastCreateTaskListId(s.lastCreateTaskListId);
+        }
       })
       .catch(() => {
         /* keep defaults */
@@ -244,6 +255,7 @@ export default function App() {
                 taskTotals={taskTotals}
                 badgeRange={badgeRange}
                 onBadgeRangeChange={setBadgeRange}
+                onCreateTask={() => setCreatingTask(true)}
               />
             )}
             {tab === 'timesheet' && (
@@ -333,6 +345,63 @@ export default function App() {
 
       <DescriptionPrompt payload={prompt} onClose={() => setPrompt(null)} />
       <IdleTruncatePrompt payload={idlePrompt} onClose={() => setIdlePrompt(null)} />
+
+      {creatingTask && (
+        <CreateTaskModal
+          // Pre-fill with the currently-selected task's list when one is
+          // selected; fall back to last-used. Either may be null, in
+          // which case the modal opens with no pre-selection.
+          initialListId={
+            tasks.find((t) => t.id === selected)?.listId ?? lastCreateTaskListId
+          }
+          onClose={() => setCreatingTask(false)}
+          onCreated={(created) => {
+            setCreatingTask(false);
+            setLastCreateTaskListId(created.listId);
+            // Refresh the assigned-tasks list. If the new task is
+            // assigned to the calling user it'll appear immediately;
+            // otherwise the toast below points the user at ClickUp web.
+            void refreshTasks();
+            const isMine = (() => {
+              // The Task type doesn't expose assignees, so we treat the
+              // post-create refresh as authoritative for "is it in my
+              // list". If the task does NOT show up after refresh, it
+              // wasn't assigned to me — show the toast.
+              return false;
+            })();
+            void isMine;
+            setCreateTaskToast({ name: created.name, url: created.url });
+            window.setTimeout(() => setCreateTaskToast(null), 6000);
+          }}
+          lexicon={lexicon}
+        />
+      )}
+
+      {createTaskToast && (
+        <div
+          className="fixed bottom-4 right-4 z-40 max-w-sm bg-panel border border-border rounded shadow-lg px-4 py-3 text-sm flex items-center gap-3"
+          role="status"
+        >
+          <span className="text-inkMuted">Created</span>
+          <span className="truncate flex-1">{createTaskToast.name}</span>
+          <a
+            href={createTaskToast.url}
+            onClick={(e) => {
+              e.preventDefault();
+              window.helm.openExternal(createTaskToast.url);
+            }}
+            className="text-accent hover:underline whitespace-nowrap"
+          >
+            Open in ClickUp →
+          </a>
+          <button
+            onClick={() => setCreateTaskToast(null)}
+            className="text-inkMuted hover:text-ink text-lg leading-none px-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

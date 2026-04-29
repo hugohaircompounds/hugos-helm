@@ -27,6 +27,29 @@ export interface ClickUpSpace {
   name: string;
 }
 
+export interface ClickUpFolder {
+  id: string;
+  name: string;
+}
+
+export interface ClickUpList {
+  id: string;
+  name: string;
+  // True when this list lives directly under a space (no folder). Pure
+  // metadata for the cascade picker; ClickUp's create-task endpoint
+  // accepts a list id regardless.
+  folderless: boolean;
+}
+
+export interface NewTaskPayload {
+  name: string;
+  description?: string;
+  status?: string;
+  priority?: 1 | 2 | 3 | 4 | null;
+  dueDate?: number | null; // unix ms
+  assignees?: number[]; // ClickUp user ids
+}
+
 export interface TaskDetail extends Task {
   subtasks: Task[];
   comments: Comment[];
@@ -423,6 +446,10 @@ export interface Settings {
   idleDetectionEnabled: boolean;
   idleTimeoutMin: number;
   lockTriggersIdle: boolean;
+  // Last list id the user picked in the create-task modal. Pre-fills the
+  // cascade picker on next open so creating consecutive tasks in the same
+  // list takes one click instead of three. Null until first use.
+  lastCreateTaskListId: string | null;
 }
 
 export interface IdleTruncatePromptPayload {
@@ -476,6 +503,15 @@ export interface HelmApi {
   getTask: (taskId: string) => Promise<TaskDetail>;
   listSpaces: () => Promise<ClickUpSpace[]>;
   getListStatuses: (listId: string) => Promise<ListStatus[]>;
+  // Cascade picker (Space → Folder → List). Each level cached in main
+  // with a 10-min TTL so opening the create-task modal repeatedly is
+  // cheap.
+  listFolders: (spaceId: string) => Promise<ClickUpFolder[]>;
+  listListsInFolder: (folderId: string) => Promise<ClickUpList[]>;
+  listFolderlessLists: (spaceId: string) => Promise<ClickUpList[]>;
+  // Create a new top-level task in the given list. Returns the
+  // normalized Task.
+  createTask: (listId: string, payload: NewTaskPayload) => Promise<Task>;
   // Lazy-load the replies of a single top-level comment. getTaskDetail
   // already fetches the most-recently-active thread's replies eagerly; this
   // is for the rest, fetched only when the user expands their disclosure.

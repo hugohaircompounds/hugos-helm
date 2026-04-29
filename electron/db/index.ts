@@ -89,6 +89,7 @@ const DEFAULT_SETTINGS: Settings = {
   idleDetectionEnabled: true,
   idleTimeoutMin: 10,
   lockTriggersIdle: true,
+  lastCreateTaskListId: null,
 };
 
 export function initDb(): Database.Database {
@@ -289,6 +290,7 @@ export function getSettings(): Settings {
         : stored['lockTriggersIdle'] === '1'
         ? true
         : DEFAULT_SETTINGS.lockTriggersIdle,
+    lastCreateTaskListId: stored['lastCreateTaskListId'] || null,
   };
 }
 

@@ -32,6 +32,13 @@ const api: HelmApi = {
     ipcRenderer.invoke('clickup:createTaskComment', taskId, segments, notifyAll),
   createCommentReply: (parentCommentId, segments, notifyAll) =>
     ipcRenderer.invoke('clickup:createCommentReply', parentCommentId, segments, notifyAll),
+  listFolders: (spaceId) => ipcRenderer.invoke('clickup:listFolders', spaceId),
+  listListsInFolder: (folderId) =>
+    ipcRenderer.invoke('clickup:listListsInFolder', folderId),
+  listFolderlessLists: (spaceId) =>
+    ipcRenderer.invoke('clickup:listFolderlessLists', spaceId),
+  createTask: (listId, payload) =>
+    ipcRenderer.invoke('clickup:createTask', listId, payload),
 
   startTimer: (id) => ipcRenderer.invoke('timer:start', id),
   stopTimer: (opts) => ipcRenderer.invoke('timer:stop', opts),

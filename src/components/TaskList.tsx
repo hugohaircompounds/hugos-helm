@@ -9,6 +9,7 @@ import type {
 } from '../../shared/types';
 import { dueUrgency, fmtDuration } from '../utils/time';
 import { TaskFilterBar } from './TaskFilterBar';
+import { TaskSearchBar } from './TaskSearchBar';
 
 interface Props {
   tasks: Task[];
@@ -23,6 +24,9 @@ interface Props {
   taskTotals?: Map<string, number>;
   badgeRange?: 'today' | 'week';
   onBadgeRangeChange?: (range: 'today' | 'week') => void;
+  // Opens the create-task modal in App.tsx. Optional so the component
+  // still renders cleanly in environments where the modal isn't wired.
+  onCreateTask?: () => void;
 }
 
 const PRIORITY_LABEL: Record<number, string> = {
@@ -54,6 +58,17 @@ const EMPTY_FILTERS: TaskFiltersState = {
   dueTo: null,
 };
 
+// Token-AND substring match against task name + list name. Whitespace
+// splits the query into tokens; every token must appear (case insensitive)
+// somewhere in the combined haystack. Empty query matches everything.
+function passesSearch(t: Task, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const tokens = q.split(/\s+/);
+  const hay = `${t.name ?? ''}\n${t.listName ?? ''}`.toLowerCase();
+  return tokens.every((tok) => hay.includes(tok));
+}
+
 function passesFilters(t: Task, f: TaskFiltersState): boolean {
   if (f.statuses.length && !f.statuses.includes(t.status || 'open')) return false;
   if (f.listNames.length && (!t.listName || !f.listNames.includes(t.listName))) return false;
@@ -74,12 +89,17 @@ export function TaskList({
   taskTotals,
   badgeRange = 'week',
   onBadgeRangeChange,
+  onCreateTask,
 }: Props) {
   const [groupOrder, setGroupOrder] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState<string[]>([]);
   const [filters, setFilters] = useState<TaskFiltersState>(EMPTY_FILTERS);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [equivalences, setEquivalences] = useState<StatusEquivalence[]>([]);
+  // Free-text search; survives tab switches in-session, NOT persisted to
+  // settings (fresh session = empty query, so the user never opens Helm
+  // wondering why some tasks are hidden).
+  const [query, setQuery] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load persisted prefs once. Re-poll on a coarse interval so changes made
@@ -144,7 +164,10 @@ export function TaskList({
     []
   );
 
-  const filtered = useMemo(() => tasks.filter((t) => passesFilters(t, filters)), [tasks, filters]);
+  const filtered = useMemo(
+    () => tasks.filter((t) => passesFilters(t, filters) && passesSearch(t, query)),
+    [tasks, filters, query]
+  );
 
   // Pinned tasks bubble to a synthetic group above all status groups. They're
   // filtered out of their normal status groups so the same task never renders
@@ -370,27 +393,40 @@ export function TaskList({
             </>
           )}
         </span>
-        {onBadgeRangeChange && (
-          <span
-            className="ml-auto inline-flex items-center gap-px text-[10px] uppercase tracking-wider"
-            title="Time-logged badge range"
-          >
-            {(['today', 'week'] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => onBadgeRangeChange(r)}
-                className={`px-1.5 py-0.5 border ${
-                  badgeRange === r
-                    ? 'bg-panelHi text-ink border-accent/40'
-                    : 'bg-panel text-inkMuted/70 border-border hover:text-ink'
-                } first:rounded-l last:rounded-r -ml-px first:ml-0`}
-              >
-                {r}
-              </button>
-            ))}
-          </span>
-        )}
+        <span className="ml-auto inline-flex items-center gap-2">
+          {onCreateTask && (
+            <button
+              onClick={onCreateTask}
+              title="Create a new task in any list on any space"
+              className="text-xs px-2 py-0.5 rounded border border-accent/40 text-accent hover:bg-accent/10"
+            >
+              + New
+            </button>
+          )}
+          {onBadgeRangeChange && (
+            <span
+              className="inline-flex items-center gap-px text-[10px] uppercase tracking-wider"
+              title="Time-logged badge range"
+            >
+              {(['today', 'week'] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => onBadgeRangeChange(r)}
+                  className={`px-1.5 py-0.5 border ${
+                    badgeRange === r
+                      ? 'bg-panelHi text-ink border-accent/40'
+                      : 'bg-panel text-inkMuted/70 border-border hover:text-ink'
+                  } first:rounded-l last:rounded-r -ml-px first:ml-0`}
+                >
+                  {r}
+                </button>
+              ))}
+            </span>
+          )}
+        </span>
       </div>
+
+      <TaskSearchBar value={query} onChange={setQuery} />
 
       <TaskFilterBar
         filters={filters}
@@ -404,8 +440,46 @@ export function TaskList({
           No tasks assigned. Configure your ClickUp token in Settings.
         </div>
       ) : filtered.length === 0 ? (
-        <div className="p-8 text-inkMuted text-center text-sm">
-          No tasks match the current filters.
+        <div className="p-8 text-inkMuted text-center text-sm flex flex-col items-center gap-2">
+          {query ? (
+            <>
+              <div>
+                No tasks match <span className="font-mono">&ldquo;{query}&rdquo;</span>.
+              </div>
+              <button
+                onClick={() => setQuery('')}
+                className="text-accent hover:underline text-xs"
+              >
+                Clear search
+              </button>
+              {(filters.statuses.length > 0 ||
+                filters.listNames.length > 0 ||
+                filters.priorities.length > 0 ||
+                filters.dueFrom !== null ||
+                filters.dueTo !== null) && (
+                <div className="text-inkMuted/60 text-xs">
+                  Active filters may also be hiding results —{' '}
+                  <button
+                    onClick={() =>
+                      applyFilters({
+                        statuses: [],
+                        listNames: [],
+                        priorities: [],
+                        dueFrom: null,
+                        dueTo: null,
+                      })
+                    }
+                    className="text-accent hover:underline"
+                  >
+                    clear filters
+                  </button>
+                  .
+                </div>
+              )}
+            </>
+          ) : (
+            <div>No tasks match the current filters.</div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-4 p-4 overflow-auto">

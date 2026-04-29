@@ -2,6 +2,7 @@ import { app, ipcMain, shell, BrowserWindow } from 'electron';
 import type {
   CommentSegment,
   DescriptionPromptPayload,
+  NewTaskPayload,
   Settings,
   Task,
   TimeEntry,
@@ -93,6 +94,20 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     'clickup:createCommentReply',
     (_e, parentCommentId: string, segments: CommentSegment[], notifyAll: boolean) =>
       clickup.createCommentReply(parentCommentId, segments, notifyAll)
+  );
+  ipcMain.handle('clickup:listFolders', (_e, spaceId: string) =>
+    clickup.listFolders(spaceId)
+  );
+  ipcMain.handle('clickup:listListsInFolder', (_e, folderId: string) =>
+    clickup.listListsInFolder(folderId)
+  );
+  ipcMain.handle('clickup:listFolderlessLists', (_e, spaceId: string) =>
+    clickup.listFolderlessLists(spaceId)
+  );
+  ipcMain.handle(
+    'clickup:createTask',
+    (_e, listId: string, payload: NewTaskPayload) =>
+      clickup.createTask(listId, payload)
   );
 
   ipcMain.handle('timer:start', async (_e, taskId: string) => {
