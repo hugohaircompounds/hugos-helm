@@ -74,7 +74,7 @@ A migration pattern exists for renaming keys (see the `standupTaskId` → `stand
 ### ClickUp API quirks to remember
 
 - `GET /team/{id}/task` wants `assignees[]=ID` **array-bracket notation** — plain `assignees=ID` returns `PUBAPITASK_017`.
-- `PUT /time_entries/{id}` and `PUT /task/{id}` responses can omit fields (task reference, properly-formed duration, list). **Never blindly spread the server response over local state** — prefer the field-aware merge pattern in `TimesheetEditor.tsx`'s `save()`. `TaskDetail.tsx` has similar merge logic.
+- `PUT /time_entries/{id}` and `PUT /task/{id}` responses can omit fields the server just persisted — most consistently `description`, but also task reference / duration / list / start. **Never blindly spread the server response over local state.** For time entries, the merge lives in `src/hooks/useTimeEntries.ts`'s `save()` and uses precedence `patch` (user intent) → `updated` (server) → `e` (prev local) per field; reversing that order silently drops the user's edit and the next view shows stale text. New editable fields on `TimeEntry` need their own clause in this merge.
 - `GET /team/{id}/time_entries/current` returns `{ data: {} }` (empty object, not null) when no timer is running. `clickup.getCurrentTimer` normalizes this.
 - ClickUp's gateway returns HTML 502s during transient backend outages. Caller must handle non-JSON error bodies gracefully.
 

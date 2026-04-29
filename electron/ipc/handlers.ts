@@ -1,4 +1,4 @@
-import { ipcMain, shell, BrowserWindow } from 'electron';
+import { app, ipcMain, shell, BrowserWindow } from 'electron';
 import type {
   DescriptionPromptPayload,
   Settings,
@@ -28,6 +28,9 @@ import { restartScheduler } from '../scheduler';
 let pendingPrompt: DescriptionPromptPayload | null = null;
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  // ---------- app ----------
+  ipcMain.handle('app:getVersion', () => app.getVersion());
+
   // ---------- settings ----------
   ipcMain.handle('settings:get', () => getSettings());
   ipcMain.handle('settings:save', (_e, patch: Partial<Settings>) => {
@@ -76,6 +79,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('clickup:getListStatuses', (_e, listId: string) =>
     clickup.getListStatuses(listId)
   );
+  ipcMain.handle('clickup:loadCommentReplies', (_e, commentId: string) =>
+    clickup.loadCommentReplies(commentId)
+  );
+  ipcMain.handle('clickup:listWorkspaceMembers', () => clickup.listWorkspaceMembers());
 
   ipcMain.handle('timer:start', async (_e, taskId: string) => {
     return timerStart(taskId, { rememberResume: false });

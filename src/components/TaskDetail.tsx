@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import type {
+  Comment as CommentType,
   Priority,
   Task,
   TaskDetail as TaskDetailType,
@@ -278,17 +279,134 @@ export function TaskDetail({ taskId, initialTask, onUpdated, lexicon }: Props) {
           <h3 className="text-xs uppercase tracking-wider text-inkMuted mb-2">Comments</h3>
           <ul className="flex flex-col gap-2">
             {detail.comments.map((c) => (
-              <li key={c.id} className="text-sm px-3 py-2 rounded bg-panel border border-border">
-                <div className="text-inkMuted text-xs mb-1">
-                  {c.user} · {new Date(c.dateCreated).toLocaleString()}
-                </div>
-                <div className="whitespace-pre-wrap">{c.text}</div>
-              </li>
+              <CommentThread
+                key={c.id}
+                comment={c}
+                onRepliesLoaded={(parentId, replies) => {
+                  if (!detail) return;
+                  const next: TaskDetailType = {
+                    ...detail,
+                    comments: detail.comments.map((existing) =>
+                      existing.id === parentId
+                        ? { ...existing, replies, repliesLoaded: true }
+                        : existing
+                    ),
+                  };
+                  setDetail(next);
+                  cache.set(detail.id, next);
+                }}
+              />
             ))}
           </ul>
         </section>
       )}
       </div>
+    </div>
+  );
+}
+
+function CommentThread({
+  comment,
+  onRepliesLoaded,
+}: {
+  comment: CommentType;
+  onRepliesLoaded: (parentId: string, replies: CommentType[]) => void;
+}) {
+  // Head thread (replies eagerly loaded server-side) starts expanded; every
+  // other thread starts collapsed. The user toggles individual threads
+  // independently from there.
+  const initiallyExpanded = comment.repliesLoaded && comment.replies.length > 0;
+  const [expanded, setExpanded] = useState(initiallyExpanded);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle() {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    if (!comment.repliesLoaded && comment.replyCount > 0) {
+      setLoading(true);
+      setError(null);
+      try {
+        const replies = await window.helm.loadCommentReplies(comment.id);
+        onRepliesLoaded(comment.id, replies);
+      } catch (e) {
+        setError((e as Error).message);
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+    }
+    setExpanded(true);
+  }
+
+  const showDisclosure = comment.replyCount > 0;
+
+  return (
+    <li className="text-sm rounded bg-panel border border-border">
+      <div className="px-3 py-2">
+        <div className="text-inkMuted text-xs mb-1">
+          {comment.user} · {new Date(comment.dateCreated).toLocaleString()}
+        </div>
+        <CommentBody comment={comment} />
+        {showDisclosure && (
+          <button
+            onClick={toggle}
+            disabled={loading}
+            className="text-inkMuted hover:text-ink text-xs mt-2 flex items-center gap-1 disabled:opacity-60"
+          >
+            {expanded ? '▾' : '▸'}{' '}
+            {loading
+              ? 'Loading…'
+              : `${comment.replyCount} ${comment.replyCount === 1 ? 'reply' : 'replies'}`}
+          </button>
+        )}
+        {error && <div className="text-danger text-xs mt-1">{error}</div>}
+      </div>
+
+      {expanded && comment.replies.length > 0 && (
+        <ul className="border-t border-border pl-6 pr-3 py-2 flex flex-col gap-2 bg-panel/40">
+          {comment.replies.map((r) => (
+            <li key={r.id} className="text-sm">
+              <div className="text-inkMuted text-xs mb-1">
+                {r.user} · {new Date(r.dateCreated).toLocaleString()}
+              </div>
+              <CommentBody comment={r} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+// Walks a Comment's structured `segments` to render text + mention chips.
+// Falls back to plaintext when segments are empty (defensive — every code
+// path that produces a Comment should populate segments).
+function CommentBody({ comment }: { comment: CommentType }) {
+  const segments =
+    comment.segments && comment.segments.length > 0
+      ? comment.segments
+      : comment.text
+      ? [{ kind: 'text' as const, value: comment.text }]
+      : [];
+  return (
+    <div className="whitespace-pre-wrap">
+      {segments.map((seg, i) => {
+        if (seg.kind === 'mention') {
+          return (
+            <span
+              key={i}
+              data-mention-user-id={seg.userId}
+              className="inline-block px-1 rounded bg-accent/15 text-accent"
+            >
+              @{seg.display}
+            </span>
+          );
+        }
+        return <span key={i}>{seg.value}</span>;
+      })}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import type {
   ClickUpSpace,
   Comment,
+  CommentSegment,
   ListStatus,
   Priority,
   Task,
   TaskDetail,
   TimeEntry,
+  WorkspaceMember,
 } from '../../shared/types';
 import { getClickUpToken } from './auth';
 import { getSettings, saveSettings, upsertCachedTasks } from '../db';
@@ -229,30 +231,266 @@ export async function listSpaces(): Promise<ClickUpSpace[]> {
   return resp.spaces.map((s) => ({ id: s.id, name: s.name }));
 }
 
-export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
-  interface CommentsResp {
-    comments: {
-      id: string;
-      comment_text: string;
-      user?: { username: string };
-      date: string;
-    }[];
+interface RawCommentSegment {
+  text?: string;
+  type?: string; // "tag" for @mentions
+  user?: { id: number; username?: string };
+  // Other ClickUp segment fields (attributes, hyperlinks, etc.) are present
+  // but ignored — we collapse rich formatting to plain text segments.
+  [key: string]: unknown;
+}
+
+interface RawComment {
+  id: string;
+  comment_text: string;
+  // Structured render source. When present, every @mention is encoded as a
+  // segment with `type: 'tag'` and a `user.id`. Older comments may omit
+  // this; we fall back to a single text segment from `comment_text`.
+  comment?: RawCommentSegment[];
+  user?: { username: string };
+  date: string;
+  // Present on top-level comments only. ClickUp uses both naming variants
+  // depending on the response context — capture both.
+  reply_count?: string | number;
+  date_updated?: string;
+}
+
+// Convert ClickUp's structured `comment` array (or fall back to plaintext)
+// into Helm's `CommentSegment[]`. Adjacent text-only segments are coalesced
+// so `[{ text: 'hi ' }, { text: 'there' }]` becomes one segment.
+function rawSegmentsToSegments(
+  raw: RawCommentSegment[] | undefined,
+  fallbackText: string
+): CommentSegment[] {
+  if (!raw || raw.length === 0) {
+    return fallbackText ? [{ kind: 'text', value: fallbackText }] : [];
   }
+  const out: CommentSegment[] = [];
+  for (const seg of raw) {
+    if (seg.type === 'tag' && seg.user && typeof seg.user.id === 'number') {
+      out.push({
+        kind: 'mention',
+        userId: seg.user.id,
+        display: seg.user.username || `user-${seg.user.id}`,
+      });
+      continue;
+    }
+    const text = typeof seg.text === 'string' ? seg.text : '';
+    if (!text) continue;
+    const last = out[out.length - 1];
+    if (last && last.kind === 'text') {
+      last.value += text;
+    } else {
+      out.push({ kind: 'text', value: text });
+    }
+  }
+  // Defensive: if the structured array gave us nothing renderable, fall
+  // back to plaintext so the user always sees something.
+  if (out.length === 0 && fallbackText) {
+    out.push({ kind: 'text', value: fallbackText });
+  }
+  return out;
+}
+
+interface CommentsResp {
+  comments: RawComment[];
+}
+
+// ClickUp's GET /task/{id}/comment paginates ~25 newest-first per page. The
+// `start` (oldest comment's unix-ms timestamp) and `start_id` cursor pair
+// walks backward through the history. Loop until a page returns empty or
+// fewer than 25 comments. Bounded at PAGE_CAP so a runaway never blocks.
+const COMMENTS_PAGE_SIZE = 25;
+const COMMENTS_PAGE_CAP = 10; // ≈ 250 comments — generous but bounded.
+
+async function fetchAllTaskComments(encodedTaskId: string): Promise<RawComment[]> {
+  const out: RawComment[] = [];
+  let start: number | undefined;
+  let startId: string | undefined;
+  for (let page = 0; page < COMMENTS_PAGE_CAP; page++) {
+    const params = new URLSearchParams();
+    if (start !== undefined) params.set('start', String(start));
+    if (startId !== undefined) params.set('start_id', startId);
+    const qs = params.toString();
+    const resp = await cu<CommentsResp>(
+      `/task/${encodedTaskId}/comment${qs ? `?${qs}` : ''}`
+    ).catch(() => ({ comments: [] } as CommentsResp));
+    if (!resp.comments.length) break;
+    out.push(...resp.comments);
+    if (resp.comments.length < COMMENTS_PAGE_SIZE) break;
+    const oldest = resp.comments[resp.comments.length - 1];
+    start = Number(oldest.date);
+    startId = oldest.id;
+  }
+  return out;
+}
+
+// Fetch the replies of a single top-level comment. Used eagerly for the
+// auto-expanded "head" thread during getTaskDetail, and lazily via the
+// loadCommentReplies IPC when the user expands any other thread.
+async function fetchCommentReplies(commentId: string): Promise<RawComment[]> {
+  const encoded = encodeURIComponent(commentId);
+  const resp = await cu<CommentsResp>(`/comment/${encoded}/reply`).catch(
+    () => ({ comments: [] } as CommentsResp)
+  );
+  return resp.comments;
+}
+
+function toReplyComment(raw: RawComment, parentId: string): Comment {
+  return {
+    id: raw.id,
+    text: raw.comment_text,
+    segments: rawSegmentsToSegments(raw.comment, raw.comment_text),
+    user: raw.user?.username || 'unknown',
+    dateCreated: Number(raw.date),
+    dateUpdated: Number(raw.date),
+    replyCount: 0,
+    parentId,
+    replies: [],
+    repliesLoaded: true,
+  };
+}
+
+function toTopLevelComment(
+  raw: RawComment,
+  replies: Comment[],
+  repliesLoaded: boolean
+): Comment {
+  const dateCreated = Number(raw.date);
+  const dateUpdated = raw.date_updated ? Number(raw.date_updated) : dateCreated;
+  const replyCount =
+    typeof raw.reply_count === 'number'
+      ? raw.reply_count
+      : raw.reply_count
+      ? Number(raw.reply_count)
+      : replies.length;
+  // Bubble the most recent activity through dateUpdated so the renderer can
+  // pick the head thread by max(top, max(replies)). When ClickUp surfaces
+  // date_updated we trust it; otherwise we compute it from any loaded
+  // replies, falling back to the comment's own dateCreated.
+  const replyMaxCreated = replies.reduce((acc, r) => Math.max(acc, r.dateCreated), 0);
+  return {
+    id: raw.id,
+    text: raw.comment_text,
+    segments: rawSegmentsToSegments(raw.comment, raw.comment_text),
+    user: raw.user?.username || 'unknown',
+    dateCreated,
+    dateUpdated: Math.max(dateUpdated, replyMaxCreated, dateCreated),
+    replyCount,
+    parentId: null,
+    replies,
+    repliesLoaded,
+  };
+}
+
+// Workspace-member listing for @mention autocomplete. Used by
+// listWorkspaceMembers() with main-process caching layered on top.
+async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
+  const { workspaceId } = await ensureWorkspace();
+  interface CUMember {
+    user: {
+      id: number;
+      username?: string;
+      email?: string;
+      initials?: string;
+      color?: string | null;
+      profilePicture?: string | null;
+    };
+  }
+  interface Resp {
+    members: CUMember[];
+  }
+  const resp = await cu<Resp>(`/team/${workspaceId}/member`);
+  return resp.members.map((m) => ({
+    id: m.user.id,
+    username: m.user.username || (m.user.email ? m.user.email.split('@')[0] : `user-${m.user.id}`),
+    email: m.user.email || '',
+    initials: m.user.initials || '',
+    color: m.user.color ?? null,
+    profilePicture: m.user.profilePicture ?? null,
+  }));
+}
+
+// Session-cached member list. The handler layer wraps this with a TTL so
+// the renderer can call it freely (e.g. on every `@` keystroke); only the
+// first call per window actually hits the network.
+let cachedMembers: WorkspaceMember[] | null = null;
+let cachedMembersAt = 0;
+const MEMBERS_TTL_MS = 10 * 60_000;
+
+export async function listWorkspaceMembers(opts: { force?: boolean } = {}): Promise<
+  WorkspaceMember[]
+> {
+  const now = Date.now();
+  if (
+    !opts.force &&
+    cachedMembers &&
+    now - cachedMembersAt < MEMBERS_TTL_MS
+  ) {
+    return cachedMembers;
+  }
+  const fresh = await fetchWorkspaceMembers();
+  cachedMembers = fresh;
+  cachedMembersAt = now;
+  return fresh;
+}
+
+export async function loadCommentReplies(commentId: string): Promise<Comment[]> {
+  const raws = await fetchCommentReplies(commentId);
+  return raws.map((r) => toReplyComment(r, commentId));
+}
+
+export async function getTaskDetail(taskId: string): Promise<TaskDetail> {
   const encoded = encodeURIComponent(taskId);
   // Fire both requests concurrently. Comments are best-effort; swallow errors
   // so a permissions blip doesn't bring the whole detail load down.
-  const [t, commentsResp] = await Promise.all([
+  const [t, rawComments] = await Promise.all([
     cu<CUTask & { subtasks?: CUTask[] }>(`/task/${encoded}?include_subtasks=true`),
-    cu<CommentsResp>(`/task/${encoded}/comment`).catch(
-      () => ({ comments: [] } as CommentsResp)
-    ),
+    fetchAllTaskComments(encoded),
   ]);
-  const comments: Comment[] = commentsResp.comments.map((c0) => ({
-    id: c0.id,
-    text: c0.comment_text,
-    user: c0.user?.username || 'unknown',
-    dateCreated: Number(c0.date),
-  }));
+
+  // Identify the head thread (most recent activity) and fetch its replies
+  // eagerly so the renderer can show it auto-expanded with no extra round
+  // trip. "Activity" prefers ClickUp's date_updated; falls back to the
+  // top-level comment's own dateCreated when absent.
+  let headIndex = -1;
+  let headActivity = -Infinity;
+  rawComments.forEach((c, i) => {
+    const updated = c.date_updated ? Number(c.date_updated) : Number(c.date);
+    const replyCount =
+      typeof c.reply_count === 'number'
+        ? c.reply_count
+        : c.reply_count
+        ? Number(c.reply_count)
+        : 0;
+    // Only consider threads that have any activity worth pre-expanding —
+    // even a 0-reply thread is fine; we just pick the most recent.
+    if (updated > headActivity) {
+      headActivity = updated;
+      headIndex = i;
+    }
+    void replyCount;
+  });
+
+  const headRawId = headIndex >= 0 ? rawComments[headIndex].id : null;
+  const headRawReplyCount =
+    headIndex >= 0
+      ? typeof rawComments[headIndex].reply_count === 'number'
+        ? (rawComments[headIndex].reply_count as number)
+        : Number(rawComments[headIndex].reply_count || 0)
+      : 0;
+  const headReplies: Comment[] =
+    headRawId && headRawReplyCount > 0
+      ? (await fetchCommentReplies(headRawId)).map((r) => toReplyComment(r, headRawId))
+      : [];
+
+  const comments: Comment[] = rawComments.map((c, i) => {
+    if (i === headIndex) {
+      return toTopLevelComment(c, headReplies, true);
+    }
+    return toTopLevelComment(c, [], false);
+  });
+
   const subtasks = (t.subtasks || []).map(normalizeTask);
   return { ...normalizeTask(t), subtasks, comments };
 }

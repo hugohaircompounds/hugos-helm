@@ -34,9 +34,47 @@ export interface TaskDetail extends Task {
 
 export interface Comment {
   id: string;
+  // Plaintext rendition. Kept as a fallback when `segments` is empty (older
+  // comments, or responses missing the structured `comment` array).
   text: string;
+  // Structured render source. Always populated — synthesized from `text`
+  // when the API response doesn't include the structured array. Renderers
+  // should prefer this over `text` so @mentions display as chips.
+  segments: CommentSegment[];
   user: string;
   dateCreated: number;
+  // Most recent activity within this comment's thread (max of own
+  // date_created and any reply date_created). Used by TaskDetail to pick
+  // which thread to auto-expand. Falls back to dateCreated when ClickUp's
+  // response doesn't surface it.
+  dateUpdated: number;
+  // Number of replies under a top-level comment. 0 for replies themselves.
+  replyCount: number;
+  // null for top-level comments; the top-level comment id for replies.
+  parentId: string | null;
+  // Populated only after replies are fetched (eagerly for the head thread,
+  // lazily for the rest via loadCommentReplies). Empty until then.
+  replies: Comment[];
+  // False on top-level comments until their replies have been fetched at
+  // least once. Always true on reply comments.
+  repliesLoaded: boolean;
+}
+
+// A discriminated union for the two segment kinds we care about. ClickUp's
+// structured `comment` array supports more (attributes, hyperlinks, code
+// blocks); rich-text rendering is out of scope, so we collapse those to
+// plain text segments.
+export type CommentSegment =
+  | { kind: 'text'; value: string }
+  | { kind: 'mention'; userId: number; display: string };
+
+export interface WorkspaceMember {
+  id: number;
+  username: string;
+  email: string;
+  initials: string;
+  color: string | null;
+  profilePicture: string | null;
 }
 
 export interface TimeEntry {
@@ -421,6 +459,9 @@ export interface EodFocusEntryPayload {
 
 // IPC channel contract — the renderer's preload-exposed API shape.
 export interface HelmApi {
+  // app
+  getAppVersion: () => Promise<string>;
+
   // settings
   getSettings: () => Promise<Settings>;
   saveSettings: (patch: Partial<Settings>) => Promise<Settings>;
@@ -435,6 +476,14 @@ export interface HelmApi {
   getTask: (taskId: string) => Promise<TaskDetail>;
   listSpaces: () => Promise<ClickUpSpace[]>;
   getListStatuses: (listId: string) => Promise<ListStatus[]>;
+  // Lazy-load the replies of a single top-level comment. getTaskDetail
+  // already fetches the most-recently-active thread's replies eagerly; this
+  // is for the rest, fetched only when the user expands their disclosure.
+  loadCommentReplies: (commentId: string) => Promise<Comment[]>;
+  // Workspace members for @mention autocomplete. Cached in main with a
+  // 10-minute TTL — call freely from the renderer; only the first call per
+  // window hits the network.
+  listWorkspaceMembers: () => Promise<WorkspaceMember[]>;
   updateTask: (
     taskId: string,
     patch: Partial<Pick<Task, 'name' | 'description' | 'status' | 'priority' | 'dueDate'>>

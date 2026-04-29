@@ -9,6 +9,8 @@ import type {
 } from '../shared/types';
 
 const api: HelmApi = {
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (patch) => ipcRenderer.invoke('settings:save', patch),
   setClickUpToken: (token) => ipcRenderer.invoke('settings:setClickUpToken', token),
@@ -23,6 +25,9 @@ const api: HelmApi = {
   updateTask: (id, patch) => ipcRenderer.invoke('clickup:updateTask', id, patch),
   listSpaces: () => ipcRenderer.invoke('clickup:listSpaces'),
   getListStatuses: (listId) => ipcRenderer.invoke('clickup:getListStatuses', listId),
+  loadCommentReplies: (commentId) =>
+    ipcRenderer.invoke('clickup:loadCommentReplies', commentId),
+  listWorkspaceMembers: () => ipcRenderer.invoke('clickup:listWorkspaceMembers'),
 
   startTimer: (id) => ipcRenderer.invoke('timer:start', id),
   stopTimer: (opts) => ipcRenderer.invoke('timer:stop', opts),

@@ -67,6 +67,21 @@ export default function App() {
       });
   }, []);
 
+  // Surface the running app version in the OS window title bar. The static
+  // <title>Helm</title> in index.html overrides BrowserWindow.title once the
+  // page loads, so the renderer is the only place that can write a version
+  // into it.
+  useEffect(() => {
+    window.helm
+      .getAppVersion()
+      .then((v) => {
+        document.title = `Helm ${v}`;
+      })
+      .catch(() => {
+        /* keep default title */
+      });
+  }, []);
+
   // Filter the weekly entries down to today when the timesheet panel asks
   // for "today". Pure renderer-side — no fetch, instant switch.
   const timesheetEntries = useMemo(() => {
