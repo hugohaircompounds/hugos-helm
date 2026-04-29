@@ -463,8 +463,8 @@ async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
   }
   const resp = await cu<Resp>('/team');
   const team = resp.teams.find((t) => t.id === workspaceId);
-  const members = team?.members || [];
-  return members.map((m) => ({
+  const rawMembers = team?.members || [];
+  const members: WorkspaceMember[] = rawMembers.map((m) => ({
     id: m.user.id,
     username:
       m.user.username ||
@@ -474,6 +474,47 @@ async function fetchWorkspaceMembers(): Promise<WorkspaceMember[]> {
     color: m.user.color ?? null,
     profilePicture: m.user.profilePicture ?? null,
   }));
+
+  // Enrich with /user — ClickUp's /team response sometimes omits the
+  // calling user's username (especially for workspace owners), so we
+  // backfill it from /user which always returns the canonical handle.
+  // This is what makes the user's @mention of themselves render with
+  // their real name instead of "user-{id}".
+  try {
+    interface CUUserFull {
+      user: {
+        id: number;
+        username?: string;
+        email?: string;
+        initials?: string;
+        color?: string | null;
+        profilePicture?: string | null;
+      };
+    }
+    const meResp = await cu<CUUserFull>('/user');
+    const me = meResp.user;
+    const idx = members.findIndex((m) => m.id === me.id);
+    const enriched: WorkspaceMember = {
+      id: me.id,
+      username:
+        me.username ||
+        members[idx]?.username ||
+        (me.email ? me.email.split('@')[0] : `user-${me.id}`),
+      email: me.email || members[idx]?.email || '',
+      initials: me.initials || members[idx]?.initials || '',
+      color: me.color ?? members[idx]?.color ?? null,
+      profilePicture: me.profilePicture ?? members[idx]?.profilePicture ?? null,
+    };
+    if (idx >= 0) {
+      members[idx] = enriched;
+    } else {
+      members.push(enriched);
+    }
+  } catch {
+    /* /user enrichment is best-effort; cache.ts already handles fallbacks */
+  }
+
+  return members;
 }
 
 // Session-cached member list. The handler layer wraps this with a TTL so
