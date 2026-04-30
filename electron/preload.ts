@@ -45,6 +45,8 @@ const api: HelmApi = {
   getTimerState: () => ipcRenderer.invoke('timer:state'),
   syncTimerFromRemote: () => ipcRenderer.invoke('timer:syncFromRemote'),
   truncateRunningEntry: (at) => ipcRenderer.invoke('timer:truncateRunningEntry', at),
+  updateRunningEntryStart: (start) =>
+    ipcRenderer.invoke('timer:updateRunningEntryStart', start),
 
   listTimeEntries: (range) => ipcRenderer.invoke('clickup:listTimeEntries', range),
   createTimeEntry: (opts) => ipcRenderer.invoke('clickup:createTimeEntry', opts),
@@ -62,6 +64,9 @@ const api: HelmApi = {
   dismissDescriptionPrompt: () => ipcRenderer.invoke('prompt:dismiss'),
   setRunningDescription: (text) =>
     ipcRenderer.invoke('timer:setRunningDescription', text),
+  flushRunningDescription: (text) =>
+    ipcRenderer.invoke('timer:flushRunningDescription', text),
+  getRunningDescription: () => ipcRenderer.invoke('timer:getRunningDescription'),
 
   onTimerChanged: (cb) => {
     const h = (_e: unknown, state: TimerState) => cb(state);

@@ -18,12 +18,15 @@ import * as gcal from '../services/gcal';
 import * as gmail from '../services/gmail';
 import * as auth from '../services/auth';
 import {
+  flushRunningDescription,
+  getRunningDescription,
   setRunningDescription,
   startTimer as timerStart,
   stopTimer as timerStop,
   syncFromRemote as timerSyncFromRemote,
   timerBus,
   truncateRunningEntry,
+  updateRunningEntryStart,
 } from '../scheduler/timer';
 import { restartScheduler } from '../scheduler';
 
@@ -173,9 +176,19 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     setRunningDescription(typeof text === 'string' ? text : '');
   });
 
+  ipcMain.handle('timer:flushRunningDescription', async (_e, text: string) => {
+    await flushRunningDescription(typeof text === 'string' ? text : '');
+  });
+
+  ipcMain.handle('timer:getRunningDescription', () => getRunningDescription());
+
   ipcMain.handle('timer:truncateRunningEntry', async (_e, at: number) => {
     if (!Number.isFinite(at)) return;
     await truncateRunningEntry(at);
+  });
+
+  ipcMain.handle('timer:updateRunningEntryStart', async (_e, start: number) => {
+    return updateRunningEntryStart(start);
   });
 
   // Relay timer + prompt events to the renderer.

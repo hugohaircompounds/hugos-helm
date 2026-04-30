@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DescriptionPromptPayload, IdleTruncatePromptPayload } from '../shared/types';
 import { useClickUp } from './hooks/useClickUp';
 import { useTimer } from './hooks/useTimer';
@@ -202,6 +202,38 @@ export default function App() {
     });
   }, []);
 
+  // Tracks whether TimeEntryDetail has unsaved description edits. Used to
+  // guard user-driven entry switches and window close. The description
+  // textarea no longer implicitly saves on blur, so without this gate
+  // typed text would silently disappear when the user clicks a different
+  // entry or refreshes the window.
+  const descriptionDirtyRef = useRef(false);
+  const handleDescriptionDirtyChange = useCallback((d: boolean) => {
+    descriptionDirtyRef.current = d;
+  }, []);
+  const guardedSetSelectedEntryId = useCallback((next: string | null): boolean => {
+    if (descriptionDirtyRef.current) {
+      if (!confirm('Discard unsaved description changes?')) return false;
+      descriptionDirtyRef.current = false;
+    }
+    setSelectedEntryId(next);
+    return true;
+  }, []);
+
+  // beforeunload prompts the user before a window refresh / close discards
+  // unsaved description edits. App-quit goes through the same renderer
+  // lifecycle in Electron, so this also catches Cmd/Alt+F4 etc.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!descriptionDirtyRef.current) return;
+      e.preventDefault();
+      e.returnValue = 'Discard unsaved description changes?';
+      return e.returnValue;
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-bg text-ink">
       <TimerBar
@@ -268,11 +300,11 @@ export default function App() {
                 onRefresh={allEntries.load}
                 selectedEntryId={selectedEntryId}
                 onSelectEntry={(id) => {
-                  setSelectedEntryId(id);
+                  if (!guardedSetSelectedEntryId(id)) return;
                   setCreatingEntry(false);
                 }}
                 onNewEntry={() => {
-                  setSelectedEntryId(null);
+                  if (!guardedSetSelectedEntryId(null)) return;
                   setCreatingEntry(true);
                 }}
                 workHoursStart={workHoursStart}
@@ -306,9 +338,10 @@ export default function App() {
                 entry={selectedEntry}
                 onSave={allEntries.save}
                 onDelete={allEntries.remove}
-                onClose={() => setSelectedEntryId(null)}
+                onClose={() => guardedSetSelectedEntryId(null)}
                 focusDescriptionTick={eodFocusTick}
                 taskUrl={selectedEntryTaskUrl}
+                onDirtyChange={handleDescriptionDirtyChange}
               />
             )}
             {tab === 'stats' && (

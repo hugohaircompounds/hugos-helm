@@ -546,6 +546,13 @@ export interface HelmApi {
   // Stop the running timer and retroactively rewrite its end timestamp to
   // `at`. Used by the idle-truncate flow when the user was locked/away.
   truncateRunningEntry: (at: number) => Promise<void>;
+  // Edit the start time of the currently running timer. Pushes the new start
+  // through to ClickUp, updates timer_state.startedAt, and emits a timer
+  // change event so the renderer's elapsed-time display + synthetic running
+  // entry rebuild with the new value. Throws if no timer is running, the
+  // running entry id is unknown (transient post-auto-resume window), or
+  // start is in the future / non-finite.
+  updateRunningEntryStart: (start: number) => Promise<TimerState>;
   listTimeEntries: (range: 'today' | 'week') => Promise<TimeEntry[]>;
   createTimeEntry: (opts: {
     taskId: string | null;
@@ -572,6 +579,18 @@ export interface HelmApi {
   // by stopTimer() when the timer stops (manual or scheduler-driven). Pass
   // empty string to clear.
   setRunningDescription: (text: string) => Promise<void>;
+  // Push the running entry's description to ClickUp immediately (without
+  // stopping the timer). Resolves the real entry id via timer_state.entryId
+  // and PUTs against it. Also writes the same value into the buffer so a
+  // later stopTimer flush is an idempotent re-PUT. Throws if no timer is
+  // running.
+  flushRunningDescription: (text: string) => Promise<void>;
+  // Last-known description for the running entry — combines the in-memory
+  // buffer (renderer keystrokes) and ClickUp's last-saved value. Used by
+  // TimeEntryDetail to seed the textarea when re-mounting onto the running
+  // entry, so saved descriptions persist across navigation. Returns ''
+  // when nothing is running.
+  getRunningDescription: () => Promise<string>;
 
   // events (renderer subscribes to main)
   onTimerChanged: (cb: (state: TimerState) => void) => () => void;

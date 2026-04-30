@@ -29,10 +29,14 @@ export function useTimeEntries(range: TimesheetRange) {
   }, [load]);
 
   const save = useCallback(
-    async (entryId: string, patch: Partial<TimeEntry>): Promise<TimeEntry | null> => {
+    async (entryId: string, patch: Partial<TimeEntry>): Promise<TimeEntry> => {
       try {
         const updated = await window.helm.updateTimeEntry(entryId, patch);
-        let merged: TimeEntry | null = null;
+        // Fall back to the server response when the entry isn't in the
+        // local list (rare — e.g. weekly view filtering or a race with
+        // a list reload). The merge below upgrades to the per-field
+        // patch→server→local precedence when the entry IS present.
+        let merged: TimeEntry = updated;
         setEntries((prev) =>
           prev.map((e) => {
             if (e.id !== entryId) return e;
@@ -73,7 +77,10 @@ export function useTimeEntries(range: TimesheetRange) {
         return merged;
       } catch (e) {
         setError((e as Error).message);
-        return null;
+        // Rethrow so callers see the actual ClickUp error (timeouts, 5xx,
+        // 401, etc.) instead of a generic "no result" placeholder. Fire-
+        // and-forget callers should attach .catch().
+        throw e;
       }
     },
     []

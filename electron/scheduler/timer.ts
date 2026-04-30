@@ -82,9 +82,11 @@ export async function startTimer(taskId: string, opts: StartOpts = {}): Promise<
 
   const entry = await clickup.startTimer(taskId);
   const cached = getCachedTask(taskId);
-  // Fresh task starts with an empty description buffer so we don't carry
-  // over text from a previous timer.
-  pendingRunningDescription = '';
+  // Seed the description buffer from whatever ClickUp returns for the new
+  // entry (typically '' for a fresh start). This is what TimeEntryDetail
+  // reads via getRunningDescription() so a remounted textarea reflects the
+  // same description ClickUp has, not a stale empty value.
+  pendingRunningDescription = entry.description ?? '';
   const next: TimerState = {
     running: true,
     taskId,
@@ -156,13 +158,14 @@ export async function stopTimer(opts: StopOpts = {}): Promise<TimerState> {
     const resumeId = prev.resumeTaskId;
     const resumeName = prev.resumeTaskName;
     try {
-      await clickup.startTimer(resumeId);
+      const resumed = await clickup.startTimer(resumeId);
+      pendingRunningDescription = resumed.description ?? '';
       next = {
         running: true,
         taskId: resumeId,
         taskName: resumeName,
-        entryId: null, // ClickUp's start response will have one; we re-read below
-        startedAt: Date.now(),
+        entryId: resumed.id,
+        startedAt: resumed.start,
         resumeTaskId: null,
         resumeTaskName: null,
       };
@@ -259,6 +262,13 @@ export async function syncFromRemote(): Promise<TimerState> {
   if (matches) return prev;
 
   const cached = remote.taskId ? getCachedTask(remote.taskId) : null;
+  // Seed the description buffer from the remote entry so a re-launched Helm
+  // or a timer started elsewhere shows the right description in the
+  // Timesheet textarea. Only seed if the local buffer is empty — don't
+  // clobber unsaved typing from this client.
+  if (!pendingRunningDescription) {
+    pendingRunningDescription = remote.description ?? '';
+  }
   const next: TimerState = {
     running: true,
     taskId: remote.taskId,
@@ -291,6 +301,47 @@ export async function resumePaused(): Promise<TimerState> {
     resumeTaskId: null,
     resumeTaskName: null,
   };
+  saveTimerState(next);
+  emitChange(next);
+  return next;
+}
+
+/**
+ * Push the running entry's description to ClickUp without stopping the
+ * timer. The buffer is updated to the saved value too, so a later
+ * stopTimer flush is an idempotent re-PUT (same value, no double-write
+ * surprise). Throws if no timer is running or the entry id is unknown.
+ */
+export async function flushRunningDescription(text: string): Promise<void> {
+  const prev = getTimerState();
+  if (!prev.running || !prev.entryId) {
+    throw new Error('No running timer to save description for.');
+  }
+  const desc = typeof text === 'string' ? text : '';
+  await clickup.updateTimeEntry(prev.entryId, { description: desc });
+  pendingRunningDescription = desc;
+}
+
+/**
+ * Edit the start time of the currently running entry. Pushes the new start
+ * to ClickUp via PUT /time_entries/{id}, then mirrors the change to local
+ * timer_state so the renderer's elapsed-time display + synthetic running
+ * entry rebuild against the corrected start. Used to fix "I forgot to start
+ * the timer 30 minutes ago" without losing the running window.
+ */
+export async function updateRunningEntryStart(start: number): Promise<TimerState> {
+  const prev = getTimerState();
+  if (!prev.running || !prev.entryId) {
+    throw new Error('No running timer to edit.');
+  }
+  if (!Number.isFinite(start) || start <= 0) {
+    throw new Error('Invalid start time.');
+  }
+  if (start > Date.now()) {
+    throw new Error('Start time cannot be in the future.');
+  }
+  await clickup.updateTimeEntry(prev.entryId, { start });
+  const next: TimerState = { ...prev, startedAt: start };
   saveTimerState(next);
   emitChange(next);
   return next;
