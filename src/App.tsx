@@ -309,6 +309,10 @@ export default function App() {
                 }}
                 workHoursStart={workHoursStart}
                 workHoursEnd={workHoursEnd}
+                timer={timer}
+                onStart={(id) => start(id)}
+                onStop={() => stop()}
+                lexicon={lexicon}
               />
             )}
             {tab === 'stats' && <StatsPanel entries={allEntries.entries} tasks={tasks} />}

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { TimeEntry } from '../../shared/types';
+import type { ThemeLexicon, TimeEntry, TimerState } from '../../shared/types';
 import { fmtDayHeader, fmtDuration, fmtTime, startOfDay } from '../utils/time';
 import { isRunningId } from '../utils/runningEntry';
 import type { TimesheetRange } from '../hooks/useTimeEntries';
@@ -17,6 +17,10 @@ interface Props {
   onNewEntry: () => void;
   workHoursStart?: number;
   workHoursEnd?: number;
+  timer: TimerState;
+  onStart: (taskId: string) => void;
+  onStop: () => void;
+  lexicon: ThemeLexicon;
 }
 
 interface DayGroup {
@@ -51,38 +55,64 @@ function EntryRow({
   entry,
   selected,
   onSelect,
+  timer,
+  onStart,
+  onStop,
+  lexicon,
 }: {
   entry: TimeEntry;
   selected: boolean;
   onSelect: (id: string) => void;
+  timer: TimerState;
+  onStart: (taskId: string) => void;
+  onStop: () => void;
+  lexicon: ThemeLexicon;
 }) {
-  const running = isRunningId(entry.id);
+  const isSynthetic = isRunningId(entry.id);
+  // A row's task is "running" when the authoritative timer points at it — this
+  // covers both the synthetic running row and any historical row for the same
+  // task, matching how TaskList decides its start/stop state.
+  const running = timer.running && !!entry.taskId && timer.taskId === entry.taskId;
   return (
     <li
       onClick={() => onSelect(entry.id)}
-      className={`px-3 py-2 rounded border cursor-pointer ${
+      className={`px-3 py-2 rounded border cursor-pointer flex items-center gap-2 ${
         selected
           ? 'bg-panelHi border-accent/50'
-          : running
+          : isSynthetic
           ? 'bg-panel border-accent/40 hover:bg-panelHi'
           : 'bg-panel border-border hover:bg-panelHi'
       }`}
     >
-      <div className="min-w-0 flex items-center gap-2">
-        {running && (
-          <span
-            className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse flex-shrink-0"
-            aria-label="Running"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-sm truncate">{entry.taskName || '(untracked)'}</div>
-          <div className="text-xs text-inkMuted">
-            {fmtTime(entry.start)} → {entry.end ? fmtTime(entry.end) : 'running'} ·{' '}
-            {fmtDuration(entry.duration)}
-          </div>
+      {isSynthetic && (
+        <span
+          className="inline-block w-2 h-2 rounded-full bg-accent animate-pulse flex-shrink-0"
+          aria-label="Running"
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="text-sm truncate">{entry.taskName || '(untracked)'}</div>
+        <div className="text-xs text-inkMuted">
+          {fmtTime(entry.start)} → {entry.end ? fmtTime(entry.end) : 'running'} ·{' '}
+          {fmtDuration(entry.duration)}
         </div>
       </div>
+      {entry.taskId && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (running) onStop();
+            else onStart(entry.taskId as string);
+          }}
+          className={`flex-shrink-0 px-2 py-1 rounded text-xs font-medium border ${
+            running
+              ? 'bg-danger/20 text-danger border-danger/40'
+              : 'bg-success/10 text-success border-success/30 hover:bg-success/20'
+          }`}
+        >
+          {running ? lexicon.stopVerb : lexicon.startVerb}
+        </button>
+      )}
     </li>
   );
 }
@@ -99,6 +129,10 @@ export function TimesheetEditor({
   onNewEntry,
   workHoursStart,
   workHoursEnd,
+  timer,
+  onStart,
+  onStop,
+  lexicon,
 }: Props) {
   const total = entries.reduce((a, e) => a + (e.duration || 0), 0);
   const days = useMemo(() => groupByDay(entries), [entries]);
@@ -159,6 +193,10 @@ export function TimesheetEditor({
                   entry={e}
                   selected={selectedEntryId === e.id}
                   onSelect={onSelectEntry}
+                  timer={timer}
+                  onStart={onStart}
+                  onStop={onStop}
+                  lexicon={lexicon}
                 />
               ))}
             </ul>
